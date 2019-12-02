@@ -3,9 +3,8 @@ import pathlib
 import subprocess
 import sys
 import os
+from typing import List, Tuple
 from contextlib import contextmanager
-
-VERSIONS = ['2.80', '2.81']
 
 GIT_BLENDER = 'git://git.blender.org/blender.git'
 
@@ -22,17 +21,20 @@ def pushd(new_dir):
         os.chdir(previous_dir)
 
 
-def run_command(cmd: str) -> int:
+def run_command(cmd: str) -> Tuple[int, List[str]]:
     print(f'# {cmd}')
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    for line in iter(p.stdout.readline, b''):
-        print(line.rstrip().decode("utf8"))
-    return p.returncode
+    lines = []
+    for line_bytes in iter(p.stdout.readline, b''):
+        line = line_bytes.rstrip().decode('utf8')
+        print(line)
+        lines.append(line)
+    return p.returncode, lines
 
 
 class Builder:
-    def __init__(self, version: str, build_dir: pathlib.Path):
-        self.version = version
+    def __init__(self, tag: str, build_dir: pathlib.Path):
+        self.tag = tag
         self.build_dir = build_dir
         self.repository = self.build_dir / 'blender'
         print(self)
@@ -44,14 +46,17 @@ class Builder:
             if not self.repository.exists():
                 print(f'clone: {self.repository}')
                 # clone
-                ret = run_command(f'git clone {GIT_BLENDER} blender')
+                ret, _ = run_command(f'git clone {GIT_BLENDER} blender')
                 if ret:
                     raise Exception(ret)
 
             with pushd('blender'):
                 # switch tag
-                print(f'switch: {self.version}')
-                ret = run_command(f'git tags')
+                ret, tags = run_command(f'git tag')
+                if self.tag not in tags:
+                    raise Exception(f'unknown tag: {self.tag}')
+                ret, _ = run_command(f'git checkout refs/tags/{self.tag}')
+                ret, _ = run_command(f'git status')
 
     def svn(self) -> None:
         print('svn')
@@ -70,7 +75,7 @@ def main():
     parser = argparse.ArgumentParser('blender module builder')
     parser.add_argument("--build", required=True)
     parser.add_argument("--install", required=True)
-    parser.add_argument("version", default="2.81")
+    parser.add_argument("tag")
     try:
         parsed = parser.parse_args()
     except TypeError as ex:
@@ -79,7 +84,7 @@ def main():
         sys.exit(1)
 
     print(parsed)
-    builder = Builder(parsed.version, pathlib.Path(parsed.build))
+    builder = Builder(parsed.tag, pathlib.Path(parsed.build))
     builder.git()
     builder.svn()
     builder.cmake()

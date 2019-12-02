@@ -14,7 +14,7 @@
                 "C:/bpy_module",
                 "--install",
                 "C:/python37",
-                "2.81",
+                "v2.81",
             ],
             "console": "integratedTerminal"
         },
