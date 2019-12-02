@@ -1,0 +1,10 @@
+{
+    "python.pythonPath": "C:\\Python37\\python.exe",
+    "cSpell.words": [
+        "Popen",
+        "chdir",
+        "cmake",
+        "popd",
+        "pushd"
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "build 2.81",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/builder.py",
+            "args": [
+                "--build",
+                "C:/bpy_module",
+                "--install",
+                "C:/python37",
+                "2.81",
+            ],
+            "console": "integratedTerminal"
+        },
+    ]
+}
