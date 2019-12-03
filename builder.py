@@ -77,6 +77,9 @@ def get_console_encoding() -> str:
 
 
 class Builder:
+    '''
+    blender bpy module builder
+    '''
     def __init__(self, tag: str, workspace: pathlib.Path, encoding: str):
         self.tag = tag
         self.workspace = workspace
@@ -85,6 +88,9 @@ class Builder:
         self.encoding = encoding
 
     def git(self) -> None:
+        '''
+        clone repository and checkout specific tag version
+        '''
         self.workspace.mkdir(parents=True, exist_ok=True)
         with pushd(self.workspace):
             if not self.repository.exists():
@@ -105,15 +111,24 @@ class Builder:
                 ret, _ = run_command(f'git status')
 
     def svn(self) -> None:
+        '''
+        checkout svn for blender source
+        '''
         # print('svn')
         make_update_py = self.repository / 'build_files/utils/make_update.py'
         with pushd(self.repository):
             run_command(f'{sys.executable} {make_update_py}')
 
     def clear_build_dir(self) -> None:
+        '''
+        remove cmake build_dir
+        '''
         shutil.rmtree(self.build_dir, ignore_errors=True)
 
     def cmake(self) -> None:
+        '''
+        generate vc solutions to build_dir
+        '''
         self.build_dir.mkdir(parents=True, exist_ok=True)
         cmake = get_cmake()
         with pushd(self.build_dir):
@@ -122,9 +137,12 @@ class Builder:
             )
 
     def build(self) -> None:
+        '''
+        run msbuild
+        '''
         print('build')
         msbuild = get_msbuild()
-        sln = next(self.build_dir.glob('*.sln'))
+        # sln = next(self.build_dir.glob('*.sln'))
         count = multiprocessing.cpu_count()
         with pushd(self.build_dir):
             run_command(
@@ -132,6 +150,9 @@ class Builder:
                 encoding=self.encoding)
 
     def install(self) -> None:
+        '''
+        copy bpy.pyd and *.dll and *.py to python lib folder
+        '''
         with pushd(self.build_dir / 'bin/Release'):
             src_dll = next(iter(glob.glob('python*.dll')))
             dst_dll = BL_DIR / src_dll
@@ -163,6 +184,43 @@ class Builder:
             print(f'copy {dst}')
             shutil.copytree(bl_version, dst)
 
+    def generate_stub(self):
+        '''
+        generate stub files for bpy module, mathutils... etc
+        '''
+        import bpy
+        import rna_info
+        # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
+        import imp
+        imp.reload(
+            rna_info
+        )  # to avoid repeated arguments in function definitions on second and the next runs - a bug in rna_info.py....
+
+        # read all data:
+        structs, funcs, ops, props = rna_info.BuildRNAInfo()
+
+        has_func = False
+        for s in structs.values():
+            if "_OT_" in s.identifier:
+                # skip the operators!
+                pass
+            else:
+                if s.base:
+                    print(
+                        f'{s.module_name}.{s.identifier}({s.base.identifier}): {s.description}'
+                    )
+                    for prop in s.properties:
+                        print(f'    {prop.type} {prop.identifier}')
+                    for function in s.functions:
+                        has_func = True
+                        print(f'    def {function}()')
+                    if has_func:
+                        break
+                else:
+                    # base is bpy_struct
+                    pass
+        a = 0
+
 
 def main():
     if sys.version_info.major != 3:
@@ -173,6 +231,7 @@ def main():
     parser.add_argument("--clean", action='store_true')
     parser.add_argument("--build", action='store_true')
     parser.add_argument("--install", action='store_true')
+    parser.add_argument("--stub", action='store_true')
     parser.add_argument("workspace")
     parser.add_argument("tag")
     try:
@@ -195,6 +254,8 @@ def main():
         builder.build()
     if parsed.install:
         builder.install()
+    if parsed.stub:
+        builder.generate_stub()
 
 
 if __name__ == '__main__':

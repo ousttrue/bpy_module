@@ -7,8 +7,11 @@
         "VSWHERE",
         "chdir",
         "cmake",
+        "funcs",
         "msbuild",
         "popd",
-        "pushd"
+        "pushd",
+        "struct",
+        "structs"
     ]
 }

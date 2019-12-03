@@ -19,5 +19,17 @@
             ],
             "console": "integratedTerminal"
         },
-    ]
+        {
+            "name": "stub 2.81",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/builder.py",
+            "args": [
+                "--stub",
+                "C:/bpy_module",
+                "v2.81",
+            ],
+            "console": "integratedTerminal"
+        },
+     ]
 }

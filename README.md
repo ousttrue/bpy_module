@@ -24,10 +24,11 @@ tag
 * clean: clear WORKSPACE_FOLDER/build 
 * build: cmake and msbuild
 * install: copy dll and *py to PYTHON_FOLDER/lib/site_lib/blender and PYTHON_FOLDER/2.XX
+* stub: generate pyi files
 
 ## requirement
 
-* python interpreter. same version(major.minor) with blender to build 
+* python interpreter. same version(major.minor) with blender to build
 * vc2019
-    * cmake(vc included)
-    * msbuild(vc included)
+  * cmake(vc included)
+  * msbuild(vc included)
