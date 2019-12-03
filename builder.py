@@ -33,7 +33,12 @@ def run_command(cmd: str, encoding='utf-8') -> Tuple[int, List[str]]:
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     lines = []
     for line_bytes in iter(p.stdout.readline, b''):
-        line = line_bytes.rstrip().decode(encoding)
+        line_bytes = line_bytes.rstrip()
+        try:
+            line = line_bytes.decode(encoding)
+        except Exception:
+            encoding = 'utf-8'
+            line = line_bytes.decode(encoding)
         print(line)
         lines.append(line)
     return p.returncode, lines
@@ -55,13 +60,29 @@ def get_msbuild() -> pathlib.Path:
     return pathlib.Path(outs[0])
 
 
+def get_codepage() -> int:
+    ret, outs = run_command("chcp.com")
+    # Active code page: 65001
+    return int(outs[0].split(':')[1].strip())
+
+
+def get_console_encoding() -> str:
+    cp = get_codepage()
+    if cp == 932:
+        return 'cp932'
+    elif cp == 65001:
+        return 'utf-8'
+    else:
+        raise NotImplementedError()
+
+
 class Builder:
-    def __init__(self, tag: str, workspace: pathlib.Path):
+    def __init__(self, tag: str, workspace: pathlib.Path, encoding: str):
         self.tag = tag
         self.workspace = workspace
         self.build_dir: pathlib.Path = self.workspace / 'build'
         self.repository: pathlib.Path = self.workspace / 'blender'
-        print(self)
+        self.encoding = encoding
 
     def git(self) -> None:
         self.workspace.mkdir(parents=True, exist_ok=True)
@@ -108,7 +129,7 @@ class Builder:
         with pushd(self.build_dir):
             run_command(
                 f'{msbuild} INSTALL.vcxproj -maxcpucount:{count} -p:configuration=Release',
-                encoding='cp932')
+                encoding=self.encoding)
 
     def install(self) -> None:
         with pushd(self.build_dir / 'bin/Release'):
@@ -162,7 +183,8 @@ def main():
         sys.exit(1)
 
     print(parsed)
-    builder = Builder(parsed.tag, pathlib.Path(parsed.workspace))
+    builder = Builder(parsed.tag, pathlib.Path(parsed.workspace),
+                      get_console_encoding())
     if parsed.update:
         builder.git()
         builder.svn()

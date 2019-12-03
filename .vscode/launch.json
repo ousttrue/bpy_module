@@ -10,8 +10,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/builder.py",
             "args": [
+                "--update",
                 // "--clean",
-                // "--build",
+                "--build",
                 "--install",
                 "C:/bpy_module",
                 "v2.81",
