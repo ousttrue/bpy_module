@@ -5,12 +5,15 @@ import sys
 import os
 import shutil
 import multiprocessing
+import glob
 from typing import List, Tuple
 from contextlib import contextmanager
 
 GIT_BLENDER = 'git://git.blender.org/blender.git'
 HERE = pathlib.Path(__file__).parent
 VSWHERE = HERE / 'vswhere.exe'
+PY_DIR = pathlib.Path(sys.executable).parent
+BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 
 
 @contextmanager
@@ -103,17 +106,53 @@ class Builder:
         sln = next(self.build_dir.glob('*.sln'))
         count = multiprocessing.cpu_count()
         with pushd(self.build_dir):
-            run_command(f'{msbuild} INSTALL.vcxproj -maxcpucount:{count} -p:configuration=Release',
-                        encoding='cp932')
+            run_command(
+                f'{msbuild} INSTALL.vcxproj -maxcpucount:{count} -p:configuration=Release',
+                encoding='cp932')
 
     def install(self) -> None:
-        print('install')
+        with pushd(self.build_dir / 'bin/Release'):
+            src_dll = next(iter(glob.glob('python*.dll')))
+            dst_dll = BL_DIR / src_dll
+            if src_dll[6] != str(sys.version_info.major):
+                raise Exception()
+            if src_dll[7] != str(sys.version_info.minor):
+                raise Exception()
+
+            with (PY_DIR / 'Lib/site-packages/blender.pth').open('w') as w:
+                w.write("blender")
+
+            BL_DIR.mkdir(parents=True, exist_ok=True)
+
+            shutil.copy('bpy.pyd', BL_DIR)
+            for f in glob.glob('*.dll'):
+                print(f'{f} => {BL_DIR / f}')
+                shutil.copy(f, BL_DIR / f)
+            for f in glob.glob('*.pdb'):
+                print(f'{f} => {BL_DIR / f}')
+                shutil.copy(f, BL_DIR / f)
+            if dst_dll.exists():
+                dst_dll.unlink()
+
+            bl_version = self.tag[1:]
+            dst = PY_DIR / bl_version
+            if dst.exists():
+                print(f'remove {dst}')
+                shutil.rmtree(dst)
+            print(f'copy {dst}')
+            shutil.copytree(bl_version, dst)
 
 
 def main():
+    if sys.version_info.major != 3:
+        raise Exception()
+
     parser = argparse.ArgumentParser('blender module builder')
-    parser.add_argument("--build", required=True)
-    parser.add_argument("--install", required=True)
+    parser.add_argument("--update", action='store_true')
+    parser.add_argument("--clean", action='store_true')
+    parser.add_argument("--build", action='store_true')
+    parser.add_argument("--install", action='store_true')
+    parser.add_argument("workspace")
     parser.add_argument("tag")
     try:
         parsed = parser.parse_args()
@@ -123,13 +162,17 @@ def main():
         sys.exit(1)
 
     print(parsed)
-    builder = Builder(parsed.tag, pathlib.Path(parsed.build))
-    builder.git()
-    builder.svn()
-    builder.clear_build_dir()
-    builder.cmake()
-    builder.build()
-    builder.install()
+    builder = Builder(parsed.tag, pathlib.Path(parsed.workspace))
+    if parsed.update:
+        builder.git()
+        builder.svn()
+    if parsed.clean:
+        builder.clear_build_dir()
+    if parsed.build:
+        builder.cmake()
+        builder.build()
+    if parsed.install:
+        builder.install()
 
 
 if __name__ == '__main__':

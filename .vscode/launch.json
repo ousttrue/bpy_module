@@ -10,10 +10,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/builder.py",
             "args": [
-                "--build",
-                "C:/bpy_module",
+                // "--clean",
+                // "--build",
                 "--install",
-                "C:/python37",
+                "C:/bpy_module",
                 "v2.81",
             ],
             "console": "integratedTerminal"
