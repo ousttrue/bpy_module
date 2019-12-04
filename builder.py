@@ -3,10 +3,11 @@ import pathlib
 import subprocess
 import sys
 import os
+import io
 import shutil
 import multiprocessing
 import glob
-from typing import List, Tuple
+from typing import List, Tuple, Dict, NamedTuple, Optional
 from contextlib import contextmanager
 
 GIT_BLENDER = 'git://git.blender.org/blender.git'
@@ -184,14 +185,131 @@ class Builder:
             print(f'copy {dst}')
             shutil.copytree(bl_version, dst)
 
-    def generate_stub(self):
+
+PYTHON_TYPE_MAP = {
+    'string': 'str',
+    'name': 'str',
+    'fcurve': 'object',
+    'index': 'int',
+    'data_path': 'object',
+    'action_group': 'object',
+    'object': 'object',
+    'collection': 'object',
+    'boolean': 'bool',
+    'enum': 'int',
+    'pointer': 'Any',
+    'int': 'int',
+    'marker': 'Any',
+    'Any': 'Any',
+    'addon': 'Any',
+}
+
+
+def get_python_type(src: str) -> str:
+    value = PYTHON_TYPE_MAP.get(src)
+    if value:
+        return value
+
+    print(f'not found: {src}')
+    pass
+
+
+class StubProperty(NamedTuple):
+    name: str
+    type: str
+
+    def __str__(self) -> str:
+        return f'{self.name}: {get_python_type(self.type)}'
+
+    @staticmethod
+    def from_rna(prop) -> 'StubProperty':
+        # print(f'    {prop.type} {prop.identifier}')
+        return StubProperty(prop.identifier, prop.type)
+
+
+class StubFunction(NamedTuple):
+    name: str
+    ret_types: List[str]
+    params: List[str]
+
+    def __str__(self) -> str:
+        params = [get_python_type(param) for param in self.params]
+        ret_types = [get_python_type(ret) for ret in self.ret_types]
+        if not self.ret_types:
+            return f'def {self.name}({", ".join(params)}) -> None: ...'
+        elif len(self.ret_types) == 1:
+            return f'def {self.name}({", ".join(params)}) -> {get_python_type(ret_types[0])}: ...'
+        else:
+            return f'def {self.name}({", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ...'
+
+    @staticmethod
+    def from_rna(func) -> 'StubFunction':
+        ret_values = [v.identifier for v in func.return_values]
+        args = [a.identifier for a in func.args]
+        return StubFunction(func.identifier, ret_values, args)
+
+
+class StubType(NamedTuple):
+    name: str
+    base: str
+    properties: List[StubProperty]
+    methods: List[StubFunction]
+
+    def __str__(self) -> str:
+        sio = io.StringIO()
+        sio.write(f'class {self.name}({self.base}):\n')
+        if self.properties or self.methods:
+            for prop in self.properties:
+                sio.write(f'    {prop}\n')
+            for func in self.methods:
+                sio.write(f'    {func}\n')
+        else:
+            sio.write('    pass\n')
+        return sio.getvalue()
+
+    @staticmethod
+    def from_rna(s) -> 'StubType':
+        base = 'bpy_struct'
+        if s.base:
+            base = s.base.identifier
+        return StubType(s.identifier, base,
+                        [StubProperty.from_rna(prop) for prop in s.properties],
+                        [StubFunction.from_rna(func) for func in s.functions])
+
+
+class StubModule:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.types: List[StubType] = []
+
+    def __str__(self) -> str:
+        return f'{self.name}({len(self.types)}types)'
+
+    def push(self, _s) -> None:
+        self.types.append(StubType.from_rna(_s))
+
+
+class StubGenerator:
+    def __init__(self):
+        self.stub_module_map: Dict[str, StubModule] = {}
+
+    def get_or_create_stub_module(self, name: str) -> StubModule:
+        stub_module = self.stub_module_map.get(name)
+        if stub_module:
+            return stub_module
+
+        stub_module = StubModule(name)
+        self.stub_module_map[name] = stub_module
+        return stub_module
+
+    def generate(self):
         '''
         generate stub files for bpy module, mathutils... etc
         '''
         import bpy
-        import rna_info
         # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
         import imp
+        import rna_info
         imp.reload(
             rna_info
         )  # to avoid repeated arguments in function definitions on second and the next runs - a bug in rna_info.py....
@@ -199,27 +317,18 @@ class Builder:
         # read all data:
         structs, funcs, ops, props = rna_info.BuildRNAInfo()
 
-        has_func = False
         for s in structs.values():
-            if "_OT_" in s.identifier:
-                # skip the operators!
-                pass
-            else:
-                if s.base:
-                    print(
-                        f'{s.module_name}.{s.identifier}({s.base.identifier}): {s.description}'
-                    )
-                    for prop in s.properties:
-                        print(f'    {prop.type} {prop.identifier}')
-                    for function in s.functions:
-                        has_func = True
-                        print(f'    def {function}()')
-                    if has_func:
-                        break
-                else:
-                    # base is bpy_struct
-                    pass
-        a = 0
+            stub_module = self.get_or_create_stub_module(s.module_name)
+            stub_module.push(s)
+
+        bpy_pyi: pathlib.Path = BL_DIR / 'bpy/types.pyi'
+        bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
+        print(bpy_pyi)
+        with open(bpy_pyi, 'w') as w:
+            for t in self.stub_module_map['bpy.types'].types[:10]:
+                w.write(str(t))
+                w.write('\n')
+                w.write('\n')
 
 
 def main():
@@ -255,7 +364,8 @@ def main():
     if parsed.install:
         builder.install()
     if parsed.stub:
-        builder.generate_stub()
+        generator = StubGenerator()
+        generator.generate()
 
 
 if __name__ == '__main__':
