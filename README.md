@@ -9,7 +9,7 @@ build blender as module
 ## usage
 
 ```
-python builder.py {WORKSPACE_FOLDER} {tag} --update --clean --build --install
+python builder.py {WORKSPACE_FOLDER} {tag} --update --clean --build --install --stubs
 
 WORKSPACE_FOLDER
     + blender(git clone)
@@ -22,10 +22,10 @@ tag
 ```
 
 * update: git clone and svn update
-* clean: clear WORKSPACE_FOLDER/build 
+* clean: clear WORKSPACE_FOLDER/build
 * build: cmake and msbuild
 * install: copy dll and *py to PYTHON_FOLDER/lib/site_lib/blender and PYTHON_FOLDER/2.XX
-* stub: generate pyi files
+* stub: generate pyi file. use pyright with vscode.
 
 ## requirement
 

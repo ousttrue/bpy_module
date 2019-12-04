@@ -188,30 +188,22 @@ class Builder:
 
 PYTHON_TYPE_MAP = {
     'string': 'str',
-    'name': 'str',
-    'fcurve': 'object',
-    'index': 'int',
-    'data_path': 'object',
-    'action_group': 'object',
-    'object': 'object',
-    'collection': 'object',
     'boolean': 'bool',
-    'enum': 'int',
-    'pointer': 'Any',
     'int': 'int',
-    'marker': 'Any',
-    'Any': 'Any',
-    'addon': 'Any',
+    'float': 'float',
+    #
 }
 
 
 def get_python_type(src: str) -> str:
+    if src is None:
+        return None
     value = PYTHON_TYPE_MAP.get(src)
     if value:
         return value
 
-    print(f'not found: {src}')
-    pass
+    # print(f'not found: {src}')
+    return 'Any'
 
 
 class StubProperty(NamedTuple):
@@ -230,26 +222,28 @@ class StubProperty(NamedTuple):
 class StubFunction(NamedTuple):
     name: str
     ret_types: List[str]
-    params: List[str]
+    params: List[StubProperty]
+    is_method: bool
 
     def __str__(self) -> str:
-        params = [get_python_type(param) for param in self.params]
+        params = [str(param) for param in self.params]
         ret_types = [get_python_type(ret) for ret in self.ret_types]
+        self_arg = 'self, ' if self.is_method else ''
         if not self.ret_types:
-            return f'def {self.name}({", ".join(params)}) -> None: ...'
+            return f'def {self.name}({self_arg}{", ".join(params)}) -> None: ... # noqa'
         elif len(self.ret_types) == 1:
-            return f'def {self.name}({", ".join(params)}) -> {get_python_type(ret_types[0])}: ...'
+            return f'def {self.name}({self_arg}{", ".join(params)}) -> {get_python_type(ret_types[0])}: ... # noqa'
         else:
-            return f'def {self.name}({", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ...'
+            return f'def {self.name}({self_arg}{", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
 
     @staticmethod
-    def from_rna(func) -> 'StubFunction':
+    def from_rna(func, is_method: bool) -> 'StubFunction':
         ret_values = [v.identifier for v in func.return_values]
-        args = [a.identifier for a in func.args]
-        return StubFunction(func.identifier, ret_values, args)
+        args = [StubProperty.from_rna(a) for a in func.args]
+        return StubFunction(func.identifier, ret_values, args, is_method)
 
 
-class StubType(NamedTuple):
+class StubStruct(NamedTuple):
     name: str
     base: str
     properties: List[StubProperty]
@@ -257,7 +251,11 @@ class StubType(NamedTuple):
 
     def __str__(self) -> str:
         sio = io.StringIO()
-        sio.write(f'class {self.name}({self.base}):\n')
+        sio.write(f'class {self.name}')
+        if self.base:
+            sio.write(f'({self.base})')
+        sio.write(':\n')
+
         if self.properties or self.methods:
             for prop in self.properties:
                 sio.write(f'    {prop}\n')
@@ -269,24 +267,25 @@ class StubType(NamedTuple):
 
     @staticmethod
     def from_rna(s) -> 'StubType':
-        base = 'bpy_struct'
+        base = None
         if s.base:
             base = s.base.identifier
-        return StubType(s.identifier, base,
-                        [StubProperty.from_rna(prop) for prop in s.properties],
-                        [StubFunction.from_rna(func) for func in s.functions])
+        return StubStruct(
+            s.identifier, base,
+            [StubProperty.from_rna(prop) for prop in s.properties],
+            [StubFunction.from_rna(func, True) for func in s.functions])
 
 
 class StubModule:
     def __init__(self, name: str) -> None:
         self.name = name
-        self.types: List[StubType] = []
+        self.types: List[StubStruct] = []
 
     def __str__(self) -> str:
         return f'{self.name}({len(self.types)}types)'
 
     def push(self, _s) -> None:
-        self.types.append(StubType.from_rna(_s))
+        self.types.append(StubStruct.from_rna(_s))
 
 
 class StubGenerator:
@@ -304,7 +303,7 @@ class StubGenerator:
 
     def generate(self):
         '''
-        generate stub files for bpy module, mathutils... etc
+        generate stubs files for bpy module, mathutils... etc
         '''
         import bpy
         # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
@@ -319,16 +318,33 @@ class StubGenerator:
 
         for s in structs.values():
             stub_module = self.get_or_create_stub_module(s.module_name)
+            if s.identifier == 'ActionFCurves':
+                a = 0
             stub_module.push(s)
 
-        bpy_pyi: pathlib.Path = BL_DIR / 'bpy/types.pyi'
-        bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
-        print(bpy_pyi)
+        bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
         with open(bpy_pyi, 'w') as w:
-            for t in self.stub_module_map['bpy.types'].types[:10]:
+            pass
+
+        bpy_types_pyi: pathlib.Path = BL_DIR / 'bpy/types.pyi'
+        bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
+        print(bpy_types_pyi)
+        with open(bpy_types_pyi, 'w') as w:
+            w.write('from typing import Any\n')
+            w.write('\n')
+            w.write('\n')
+            for t in sorted(self.stub_module_map['bpy.types'].types,
+                            key=lambda t: 1 if t.base else 0):
                 w.write(str(t))
                 w.write('\n')
                 w.write('\n')
+
+        for k, v in self.stub_module_map.items():
+            if k == 'bpy.types':
+                continue
+            print(f'## {k}')
+            for s in v.types:
+                print(s.name)
 
 
 def main():
@@ -340,7 +356,7 @@ def main():
     parser.add_argument("--clean", action='store_true')
     parser.add_argument("--build", action='store_true')
     parser.add_argument("--install", action='store_true')
-    parser.add_argument("--stub", action='store_true')
+    parser.add_argument("--stubs", action='store_true')
     parser.add_argument("workspace")
     parser.add_argument("tag")
     try:
@@ -363,7 +379,7 @@ def main():
         builder.build()
     if parsed.install:
         builder.install()
-    if parsed.stub:
+    if parsed.stubs:
         generator = StubGenerator()
         generator.generate()
 

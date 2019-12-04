@@ -9,6 +9,7 @@
         "cmake",
         "funcs",
         "msbuild",
+        "noqa",
         "popd",
         "pushd",
         "struct",

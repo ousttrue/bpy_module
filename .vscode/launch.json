@@ -25,7 +25,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/builder.py",
             "args": [
-                "--stub",
+                "--stubs",
                 "C:/bpy_module",
                 "v2.81",
             ],
