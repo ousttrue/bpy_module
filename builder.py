@@ -62,9 +62,14 @@ def get_msbuild() -> pathlib.Path:
 
 
 def get_codepage() -> int:
-    ret, outs = run_command("chcp.com")
-    # Active code page: 65001
-    return int(outs[0].split(':')[1].strip())
+    try:
+        ret, outs = run_command("chcp.com", "utf-8")
+        # Active code page: 65001
+        return int(outs[0].split(':')[1].strip())
+    except Exception:
+        ret, outs = run_command("chcp.com", "cp932")
+        # Active code page: 65001
+        return int(outs[0].split(':')[1].strip())
 
 
 def get_console_encoding() -> str:
@@ -323,6 +328,7 @@ class StubGenerator:
             stub_module.push(s)
 
         bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
+        bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
         with open(bpy_pyi, 'w') as w:
             pass
 
