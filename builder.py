@@ -367,6 +367,26 @@ def main():
     if sys.version_info.major != 3:
         raise Exception()
 
+    try:
+        ret, _ = run_command('git --version')
+    except FileNotFoundError as ex:
+        print(ex)
+        return
+    try:
+        ret, _ = run_command('svn --version --quiet')
+    except FileNotFoundError as ex:
+        print(ex)
+        return
+    try:
+        get_msbuild()
+    except:
+        print('msbuild not found')
+        return
+    try:
+        print('cmake not found')
+        get_cmake()
+    except:
+        return
     parser = argparse.ArgumentParser('blender module builder')
     parser.add_argument("--update", action='store_true')
     parser.add_argument("--clean", action='store_true')
