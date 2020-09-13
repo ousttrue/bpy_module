@@ -49,6 +49,11 @@ def get_cmake() -> pathlib.Path:
     ret, outs = run_command(
         f'{VSWHERE} -latest -products * -requires Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath'
     )
+    if not outs:
+        # fallback
+        ret, outs = run_command(
+            f'{VSWHERE} -products Microsoft.VisualStudio.Product.BuildTools -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe'
+        )
     return pathlib.Path(
         f'{outs[0]}/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'
     )
@@ -58,6 +63,11 @@ def get_msbuild() -> pathlib.Path:
     ret, outs = run_command(
         f'{VSWHERE} -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe'
     )
+    if not outs:
+        # fallback
+        ret, outs = run_command(
+            f'{VSWHERE} -products Microsoft.VisualStudio.Product.BuildTools -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe'
+        )
     return pathlib.Path(outs[0])
 
 
