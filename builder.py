@@ -7,6 +7,7 @@ import io
 import shutil
 import multiprocessing
 import glob
+import re
 from typing import List, Tuple, Dict, NamedTuple, Optional
 from contextlib import contextmanager
 
@@ -17,13 +18,19 @@ PY_DIR = pathlib.Path(sys.executable).parent
 BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 
 
+def python_define():
+    v = sys.version_info
+    d = str(PY_DIR).replace("\\", "/")
+    return f'-DPYTHON_VERSION={v.major}.{v.minor}.{v.micro} -DPYTHON_ROOT_DIR={d} -DPYTHON_INCLUDE_DIRS={d}/include -DPYTHON_LIBRARIES={d}/libs/python{v.major}.{v.minor}.lib'
+
+
 @contextmanager
 def pushd(new_dir):
     previous_dir = os.getcwd()
     print(f'pushd: {new_dir}')
     os.chdir(new_dir)
     try:
-        yield
+        yield pathlib.Path('.').absolute()
     finally:
         print(f'popd: {previous_dir}')
         os.chdir(previous_dir)
@@ -116,15 +123,29 @@ class Builder:
                 if ret:
                     raise Exception(ret)
 
-            with pushd('blender'):
-                # switch tag
-                ret, tags = run_command(f'git tag')
-                if self.tag not in tags:
-                    raise Exception(f'unknown tag: {self.tag}')
-                ret, _ = run_command(f'git checkout refs/tags/{self.tag}')
+            with pushd('blender') as current:
+                # switch branch
+                ret, _ = run_command(f'git switch blender-{self.tag}-release')
                 ret, _ = run_command(
                     f'git submodule update --init --recursive')
                 ret, _ = run_command(f'git status')
+
+                # patch
+                # # uncached vars
+                # set(PYTHON_INCLUDE_DIRS "${PYTHON_INCLUDE_DIR}")
+                # set(PYTHON_LIBRARIES debug "${PYTHON_LIBRARY_DEBUG}" optimized "${PYTHON_LIBRARY}" )
+                path = current / 'build_files/cmake/platform/platform_win32.cmake'
+                lines = []
+                d = str(PY_DIR).replace("\\", "/")
+                v = sys.version_info
+                for l in path.read_text().splitlines():
+                    if re.match(r'^\s*set\(PYTHON_INCLUDE_DIRS ', l):
+                        l = f'set(PYTHON_INCLUDE_DIRS "{d}/include")'
+                    elif re.match(r'^\s*set\(PYTHON_LIBRARIES ', l):
+                        l = f'set(PYTHON_LIBRARIES "{d}/libs/python{v.major}{v.minor}.lib")'
+                    lines.append(l + '\n')
+                with path.open('w') as w:
+                    w.writelines(lines)
 
     def svn(self) -> None:
         '''
@@ -147,9 +168,11 @@ class Builder:
         '''
         self.build_dir.mkdir(parents=True, exist_ok=True)
         cmake = get_cmake()
+
+        # https://devtalk.blender.org/t/bpy-module-dll-load-failed/11765
         with pushd(self.build_dir):
             run_command(
-                f'{cmake} ../blender -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF'
+                f'{cmake} ../blender {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
             )
 
     def build(self) -> None:
@@ -172,10 +195,10 @@ class Builder:
         with pushd(self.build_dir / 'bin/Release'):
             src_dll = next(iter(glob.glob('python*.dll')))
             dst_dll = BL_DIR / src_dll
-            if src_dll[6] != str(sys.version_info.major):
-                raise Exception()
-            if src_dll[7] != str(sys.version_info.minor):
-                raise Exception()
+            # if src_dll[6] != str(sys.version_info.major):
+            #     raise Exception()
+            # if src_dll[7] != str(sys.version_info.minor):
+            #     raise Exception()
 
             with (PY_DIR / 'Lib/site-packages/blender.pth').open('w') as w:
                 w.write("blender")
@@ -184,6 +207,8 @@ class Builder:
 
             shutil.copy('bpy.pyd', BL_DIR)
             for f in glob.glob('*.dll'):
+                if f == 'python37.dll':
+                    continue
                 print(f'{f} => {BL_DIR / f}')
                 shutil.copy(f, BL_DIR / f)
             for f in glob.glob('*.pdb'):
@@ -197,7 +222,8 @@ class Builder:
             if dst.exists():
                 print(f'remove {dst}')
                 shutil.rmtree(dst)
-            print(f'copy {dst}')
+            current = pathlib.Path('.').absolute()
+            print(f'copy {current / bl_version} => {dst}')
             shutil.copytree(bl_version, dst)
 
 
@@ -346,7 +372,7 @@ class StubGenerator:
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
-            w.write('from typing import Any\n')
+            w.write('from typing import Any, Tuple\n')
             w.write('\n')
             w.write('\n')
             for t in sorted(self.stub_module_map['bpy.types'].types,
@@ -387,6 +413,7 @@ def main():
         get_cmake()
     except:
         return
+
     parser = argparse.ArgumentParser('blender module builder')
     parser.add_argument("--update", action='store_true')
     parser.add_argument("--clean", action='store_true')

@@ -1,5 +1,4 @@
 {
-    "python.pythonPath": "C:\\Python37\\python.exe",
     "cSpell.words": [
         "DWITH",
         "NUMPY",
@@ -14,5 +13,6 @@
         "pushd",
         "struct",
         "structs"
-    ]
+    ],
+    "python.formatting.provider": "yapf"
 }

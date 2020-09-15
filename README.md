@@ -2,9 +2,16 @@
 
 build blender as module
 
-## ToDo
+## require
+### build
+* vc2019
+  * cmake(vc included)
+  * msbuild(vc included)
+* git https://git-scm.com/
+* svn https://sliksvn.com/download/
 
-* [ ] pyi for bpy
+### runtime
+* numpy
 
 ## usage
 
@@ -17,8 +24,7 @@ WORKSPACE_FOLDER
     + build(cmake build)
 
 tag
-    + v2.80
-    + v2.81
+    + v2.83
 ```
 
 * update: git clone and svn update
@@ -26,10 +32,3 @@ tag
 * build: cmake and msbuild
 * install: copy dll and *py to PYTHON_FOLDER/lib/site_lib/blender and PYTHON_FOLDER/2.XX
 * stub: generate pyi file. use pyright with vscode.
-
-## requirement
-
-* python interpreter. same version(major.minor) with blender to build
-* vc2019
-  * cmake(vc included)
-  * msbuild(vc included)
