@@ -172,7 +172,7 @@ class Builder:
         # https://devtalk.blender.org/t/bpy-module-dll-load-failed/11765
         with pushd(self.build_dir):
             run_command(
-                f'{cmake} ../blender {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
+                f'{cmake} ../blender {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
             )
 
     def build(self) -> None:
@@ -193,8 +193,8 @@ class Builder:
         copy bpy.pyd and *.dll and *.py to python lib folder
         '''
         with pushd(self.build_dir / 'bin/Release'):
-            src_dll = next(iter(glob.glob('python*.dll')))
-            dst_dll = BL_DIR / src_dll
+            # src_dll = next(iter(glob.glob('python*.dll')))
+            # dst_dll = BL_DIR / src_dll
             # if src_dll[6] != str(sys.version_info.major):
             #     raise Exception()
             # if src_dll[7] != str(sys.version_info.minor):
@@ -207,15 +207,13 @@ class Builder:
 
             shutil.copy('bpy.pyd', BL_DIR)
             for f in glob.glob('*.dll'):
-                if f == 'python37.dll':
+                if f.startswith('python'):
                     continue
                 print(f'{f} => {BL_DIR / f}')
                 shutil.copy(f, BL_DIR / f)
             for f in glob.glob('*.pdb'):
                 print(f'{f} => {BL_DIR / f}')
                 shutil.copy(f, BL_DIR / f)
-            if dst_dll.exists():
-                dst_dll.unlink()
 
             bl_version = self.tag[1:]
             dst = PY_DIR / bl_version
