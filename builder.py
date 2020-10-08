@@ -28,6 +28,7 @@ def python_define():
 def pushd(new_dir):
     previous_dir = os.getcwd()
     print(f'pushd: {new_dir}')
+    pathlib.Path(new_dir).mkdir(exist_ok=True, parents=True)
     os.chdir(new_dir)
     try:
         yield pathlib.Path('.').absolute()
@@ -126,6 +127,7 @@ class Builder:
             with pushd('blender') as current:
                 # switch branch
                 ret, _ = run_command(f'git switch blender-{self.tag}-release')
+                ret, _ = run_command(f'git restore .')
                 ret, _ = run_command(
                     f'git submodule update --init --recursive')
                 ret, _ = run_command(f'git status')
@@ -184,8 +186,11 @@ class Builder:
         # sln = next(self.build_dir.glob('*.sln'))
         count = multiprocessing.cpu_count()
         with pushd(self.build_dir):
+            vcxproj = pathlib.Path('INSTALL.vcxproj')
+            if not vcxproj.exists():
+                raise f'{vcxproj} not exists'
             run_command(
-                f'{msbuild} INSTALL.vcxproj -maxcpucount:{count} -p:configuration=Release',
+                f'{msbuild} {vcxproj} -maxcpucount:{count} -p:configuration=Release',
                 encoding=self.encoding)
 
     def install(self) -> None:
