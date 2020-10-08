@@ -309,6 +309,14 @@ class StubStruct(NamedTuple):
             sio.write('    pass\n')
         return sio.getvalue()
 
+    def enable_base(self, used) -> bool:
+        if not self.base:
+            return True
+        for u in used:
+            if self.base == u.name:
+                return True
+        return False
+
     @staticmethod
     def from_rna(s) -> 'StubType':
         base = None
@@ -330,6 +338,40 @@ class StubModule:
 
     def push(self, _s) -> None:
         self.types.append(StubStruct.from_rna(_s))
+
+    def enumerate(self):
+        types = self.types[:]
+        used = []
+
+        def enable(t):
+            if t.enable_base(used):
+                return True
+
+        while len(types):
+            remove = []
+            for t in types:
+                if enable(t):
+                    remove.append(t)
+                    yield t
+            if len(remove) == 0:
+                raise Exception('Error')
+            used += remove
+            for r in remove:
+                types.remove(r)
+
+    def generate(self, dir: pathlib.Path):
+        bpy_types_pyi: pathlib.Path = dir / self.name.replace(
+            '.', '/') / '__init__.py'
+        bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
+        print(bpy_types_pyi)
+        with open(bpy_types_pyi, 'w') as w:
+            w.write('from typing import Any, Tuple\n')
+            w.write('\n')
+            w.write('\n')
+            for t in self.enumerate():
+                w.write(str(t))
+                w.write('\n')
+                w.write('\n')
 
 
 class StubGenerator:
@@ -362,34 +404,17 @@ class StubGenerator:
 
         for s in structs.values():
             stub_module = self.get_or_create_stub_module(s.module_name)
-            if s.identifier == 'ActionFCurves':
-                a = 0
             stub_module.push(s)
 
+        # __init__.pyi
         bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
         with open(bpy_pyi, 'w') as w:
-            pass
-
-        bpy_types_pyi: pathlib.Path = BL_DIR / 'bpy/types.pyi'
-        bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
-        print(bpy_types_pyi)
-        with open(bpy_types_pyi, 'w') as w:
-            w.write('from typing import Any, Tuple\n')
-            w.write('\n')
-            w.write('\n')
-            for t in sorted(self.stub_module_map['bpy.types'].types,
-                            key=lambda t: 1 if t.base else 0):
-                w.write(str(t))
-                w.write('\n')
-                w.write('\n')
+            w.write('from. import types')
 
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
-                continue
-            print(f'## {k}')
-            for s in v.types:
-                print(s.name)
+                v.generate(BL_DIR)
 
 
 def main():
