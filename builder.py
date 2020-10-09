@@ -242,14 +242,17 @@ PYTHON_TYPE_MAP = {
 
 
 def get_python_type(prop) -> str:
-    # if src is None:
-    #     return 'None'
+    if (prop.type == 'collection'):
+        return f"collections.abc.Sequence['{prop.fixed_type.identifier}']"
 
-    # print(f'    {prop.type} {prop.identifier}')
+    value_type = PYTHON_TYPE_MAP.get(prop.type, 'Any')
     if prop.array_length == 0:
-        return PYTHON_TYPE_MAP.get(prop.type, 'Any')
+        return value_type
 
-    values = ', '.join([PYTHON_TYPE_MAP.get(prop.type)] * prop.array_length)
+    if value_type == 'float':
+        return 'Vector'
+
+    values = ', '.join([value_type] * prop.array_length)
     return f'Tuple[{values}]'
 
 
@@ -283,9 +286,7 @@ class StubFunction(NamedTuple):
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
-        ret_values = [
-            get_python_type(v) for v in func.return_values
-        ]
+        ret_values = [get_python_type(v) for v in func.return_values]
         args = [StubProperty.from_rna(a) for a in func.args]
         return StubFunction(func.identifier, ret_values, args, is_method)
 
@@ -305,6 +306,9 @@ class StubStruct(NamedTuple):
 
         if self.properties:
             for prop in self.properties:
+                if self.name == 'RenderEngine' and prop.name == 'render':
+                    # skip
+                    continue
                 sio.write(f'    {prop}\n')
         if self.methods:
             for func in self.methods:
@@ -341,6 +345,9 @@ class StubModule:
         return f'{self.name}({len(self.types)}types)'
 
     def push(self, _s) -> None:
+        if _s.identifier == 'PropertyGroupItem':
+            # skip
+            return
         self.types.append(StubStruct.from_rna(_s))
 
     def enumerate(self):
@@ -370,6 +377,7 @@ class StubModule:
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
             w.write('from typing import Any, Tuple\n')
+            w.write('import collections.abc\n')
             w.write('\n')
             w.write('\n')
             for t in self.enumerate():
