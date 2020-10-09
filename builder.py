@@ -241,15 +241,16 @@ PYTHON_TYPE_MAP = {
 }
 
 
-def get_python_type(src: str) -> str:
-    if src is None:
-        return None
-    value = PYTHON_TYPE_MAP.get(src)
-    if value:
-        return value
+def get_python_type(prop) -> str:
+    # if src is None:
+    #     return 'None'
 
-    # print(f'not found: {src}')
-    return 'Any'
+    # print(f'    {prop.type} {prop.identifier}')
+    if prop.array_length == 0:
+        return PYTHON_TYPE_MAP.get(prop.type, 'Any')
+
+    values = ', '.join([PYTHON_TYPE_MAP.get(prop.type)] * prop.array_length)
+    return f'Tuple[{values}]'
 
 
 class StubProperty(NamedTuple):
@@ -257,12 +258,11 @@ class StubProperty(NamedTuple):
     type: str
 
     def __str__(self) -> str:
-        return f'{self.name}: {get_python_type(self.type)}'
+        return f'{self.name}: {self.type}'
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
-        # print(f'    {prop.type} {prop.identifier}')
-        return StubProperty(prop.identifier, prop.type)
+        return StubProperty(prop.identifier, get_python_type(prop))
 
 
 class StubFunction(NamedTuple):
@@ -273,25 +273,26 @@ class StubFunction(NamedTuple):
 
     def __str__(self) -> str:
         params = [str(param) for param in self.params]
-        ret_types = [get_python_type(ret) for ret in self.ret_types]
         self_arg = 'self, ' if self.is_method else ''
         if not self.ret_types:
             return f'def {self.name}({self_arg}{", ".join(params)}) -> None: ... # noqa'
         elif len(self.ret_types) == 1:
-            return f'def {self.name}({self_arg}{", ".join(params)}) -> {get_python_type(ret_types[0])}: ... # noqa'
+            return f'def {self.name}({self_arg}{", ".join(params)}) -> {self.ret_types[0]}: ... # noqa'
         else:
-            return f'def {self.name}({self_arg}{", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
+            return f'def {self.name}({self_arg}{", ".join(params)}) -> Tuple[{", ".join(self.ret_types)}]: ... # noqa'
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
-        ret_values = [v.identifier for v in func.return_values]
+        ret_values = [
+            get_python_type(v) for v in func.return_values
+        ]
         args = [StubProperty.from_rna(a) for a in func.args]
         return StubFunction(func.identifier, ret_values, args, is_method)
 
 
 class StubStruct(NamedTuple):
     name: str
-    base: str
+    base: Optional[str]
     properties: List[StubProperty]
     methods: List[StubFunction]
 
@@ -302,12 +303,13 @@ class StubStruct(NamedTuple):
             sio.write(f'({self.base})')
         sio.write(':\n')
 
-        if self.properties or self.methods:
+        if self.properties:
             for prop in self.properties:
                 sio.write(f'    {prop}\n')
+        if self.methods:
             for func in self.methods:
                 sio.write(f'    {func}\n')
-        else:
+        if not self.properties and not self.methods:
             sio.write('    pass\n')
         return sio.getvalue()
 
@@ -320,7 +322,7 @@ class StubStruct(NamedTuple):
         return False
 
     @staticmethod
-    def from_rna(s) -> 'StubType':
+    def from_rna(s) -> 'StubStruct':
         base = None
         if s.base:
             base = s.base.identifier
@@ -457,7 +459,8 @@ class StubGenerator:
                 w.write(f'class {name}:\n')
                 counter = 1
                 for k, v in klass.__dict__.items():
-                    if type(v) == types.GetSetDescriptorType:
+                    attr_type = type(v)
+                    if attr_type == types.GetSetDescriptorType:
                         if v.__doc__:
                             m = re.search(r':type: (.*)$', v.__doc__)
                             if m:
@@ -465,8 +468,9 @@ class StubGenerator:
                                 w.write(f'    {k}: {t}\n')
                         counter += 1
                     else:
+                        # print(name, k, attr_type, v)
                         pass
-                        # print(type(v))
+
                 if counter == 0:
                     w.write(f'    pass\n')
 
