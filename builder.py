@@ -10,6 +10,8 @@ import glob
 import re
 from typing import List, Tuple, Dict, NamedTuple, Optional
 from contextlib import contextmanager
+import types
+import inspect
 
 GIT_BLENDER = 'git://git.blender.org/blender.git'
 HERE = pathlib.Path(__file__).parent
@@ -375,6 +377,9 @@ class StubModule:
 
 
 class StubGenerator:
+    '''
+    blender/doc/python_api/sphinx_doc_gen.py
+    '''
     def __init__(self):
         self.stub_module_map: Dict[str, StubModule] = {}
 
@@ -415,6 +420,60 @@ class StubGenerator:
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
                 v.generate(BL_DIR)
+
+        # mathutil
+        import mathutils
+        self.generate_module(mathutils)
+
+    def generate_module(self, m: types.ModuleType):
+        '''
+        pymodule2sphinx
+        py_descr2sphinx
+        '''
+        # print(m.__name__)
+        bpy_pyi: pathlib.Path = BL_DIR.parent / f'{m.__name__}/__init__.pyi'
+        bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
+
+        type_map = {
+            'float': 'float',
+            'float triplet': 'Tuple[float, float, float]',
+            'boolean': 'bool',
+            'bool': 'bool',
+            'Vector': 'Vector',
+            ':class:`Vector`': 'Vector',
+            'Matrix Access': 'Matrix',
+        }
+
+        def to_python_type(doc: str) -> str:
+            if doc.startswith('string '):
+                return f'str #{doc}'
+            return type_map[doc]
+
+        with open(bpy_pyi, 'w') as w:
+            w.write('from typing import Tuple\n')
+            w.write('\n')
+
+            def write_class(name: str, klass: type):
+                w.write(f'class {name}:\n')
+                counter = 1
+                for k, v in klass.__dict__.items():
+                    if type(v) == types.GetSetDescriptorType:
+                        if v.__doc__:
+                            m = re.search(r':type: (.*)$', v.__doc__)
+                            if m:
+                                t = to_python_type(m.group(1))
+                                w.write(f'    {k}: {t}\n')
+                        counter += 1
+                    else:
+                        pass
+                        # print(type(v))
+                if counter == 0:
+                    w.write(f'    pass\n')
+
+            for name, klass in inspect.getmembers(m, inspect.isclass):
+                write_class(name, klass)
+                w.write('\n')
+                w.write('\n')
 
 
 def main():
