@@ -23,11 +23,8 @@
       "name": "stub 2.83",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/builder.py",
+      "program": "${workspaceFolder}/stub_generator.py",
       "args": [
-        "--stubs",
-        "C:/bpy_module",
-        "v2.83",
       ],
       "console": "integratedTerminal"
     },
