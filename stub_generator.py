@@ -21,6 +21,14 @@ PYTHON_TYPE_MAP = {
     'Vector': 'Vector',
     ':class:`Vector`': 'Vector',
     'Matrix Access': 'Matrix',
+    ':class:`Matrix`': 'Matrix',
+    ':class:`Quaternion`': 'Quaternion',
+    '(:class:`Vector`, :class:`Quaternion`, :class:`Vector`)':
+    'Tuple[Vector, Quaternion, Vector]',
+    ':class:`Euler`': 'Euler',
+    '(:class:`Vector`, float) pair': 'Tuple[Vector, float]',
+    '(:class:`Quaternion`, float) pair': 'Tuple[Quaternion, float]',
+    'tuple': 'List[float]',
 }
 
 
@@ -33,6 +41,10 @@ def get_python_type(prop) -> str:
         return value_type
 
     if value_type == 'float':
+        if prop.array_length == 9:
+            return 'Matrix'
+        if prop.array_length == 16:
+            return 'Matrix'
         return 'Vector'
 
     values = ', '.join([value_type] * prop.array_length)
@@ -247,13 +259,24 @@ class StubGenerator:
                     attr_type = type(v)
                     if attr_type == types.GetSetDescriptorType:
                         if v.__doc__:
-                            m = re.search(r':type: (.*)$', v.__doc__)
+                            m = re.search(r':type:\s*(.*)$', v.__doc__)
                             if m:
                                 t = to_python_type(m.group(1))
                                 w.write(f'    {k}: {t}\n')
                         counter += 1
+                    elif attr_type == types.MethodDescriptorType:
+                        if v.__doc__:
+                            m = re.search(r':rtype:\s*(.*)$', v.__doc__)
+                            if m:
+                                t = to_python_type(m.group(1))
+                                # w.write(f'    {k}: Callable[[], [{t}]]\n')
+                                w.write(
+                                    f'    def {k}(self) -> {t}: ... # noqa\n')
+
                     else:
                         # print(name, k, attr_type, v)
+                        if k == 'to_translation':
+                            print(v)
                         pass
 
                 if counter == 0:

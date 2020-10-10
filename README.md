@@ -59,6 +59,7 @@ example
 * install pylance
 
 ```json
+// settings.json
   "python.languageServer": "Pylance",
   "python.analysis.typeCheckingMode": "basic",
 ```
