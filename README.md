@@ -1,34 +1,61 @@
 # bpy_module
 
-build blender as module
+* Auto clone, build and install blender python module(bpy)
+* Link to local python(C:\Python38)
+* generate pyi
+* Blender v2.83
 
 ## require
-### build
+
 * vc2019
   * cmake(vc included)
   * msbuild(vc included)
 * git https://git-scm.com/
 * svn https://sliksvn.com/download/
 
-### runtime
-* numpy
+## usage (build and install bpy)
 
-## usage
-
-```
+```sh
 python builder.py {WORKSPACE_FOLDER} {tag} --update --clean --build --install --stubs
 
 WORKSPACE_FOLDER
     + blender(git clone)
     + lib(svn checkout)
     + build(cmake build)
-
-tag
-    + v2.83
 ```
 
 * update: git clone and svn update
 * clean: clear WORKSPACE_FOLDER/build
 * build: cmake and msbuild
 * install: copy dll and *py to PYTHON_FOLDER/lib/site_lib/blender and PYTHON_FOLDER/2.XX
-* stub: generate pyi file. use pyright with vscode.
+
+example
+
+```sh
+> C:\Python38\python.exe builder.py --update --build --install C:/bpy_module v2.83
+# link to C:\Pyhthon38\libs\python38.lib and install to C:\Python38
+```
+
+## generate python stub(pyi)
+
+* require bpy install
+
+```sh
+python stub_generator.py
+```
+
+example
+
+```sh
+> C:\Python38\python.exe stub_generator.py
+# generate C:\Python38\lib\site-package\blender\bpy\__init__.pyi
+```
+
+### use stub on vscode
+
+* install pylance
+
+```json
+  "python.languageServer": "Pylance",
+  "python.analysis.typeCheckingMode": "basic",
+```
