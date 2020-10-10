@@ -13,9 +13,14 @@ BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 PYTHON_TYPE_MAP = {
     'string': 'str',
     'boolean': 'bool',
+    'bool': 'bool',
     'int': 'int',
     'float': 'float',
     #
+    'float triplet': 'Tuple[float, float, float]',
+    'Vector': 'Vector',
+    ':class:`Vector`': 'Vector',
+    'Matrix Access': 'Matrix',
 }
 
 
@@ -155,6 +160,7 @@ class StubModule:
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
             w.write('from typing import Any, Tuple\n')
+            w.write('from mathutils import Vector, Matrix\n')
             w.write('import collections.abc\n')
             w.write('\n')
             w.write('\n')
@@ -203,11 +209,15 @@ class StubGenerator:
         bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
         with open(bpy_pyi, 'w') as w:
-            w.write('from. import types')
+            w.write('from . import types\n')
+            ## add
+            w.write('data: types.BlendData\n')
 
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
                 v.generate(BL_DIR)
+            else:
+                print(k)
 
         # mathutil
         import mathutils
@@ -218,24 +228,13 @@ class StubGenerator:
         pymodule2sphinx
         py_descr2sphinx
         '''
-        # print(m.__name__)
         bpy_pyi: pathlib.Path = BL_DIR / f'{m.__name__}/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
-
-        type_map = {
-            'float': 'float',
-            'float triplet': 'Tuple[float, float, float]',
-            'boolean': 'bool',
-            'bool': 'bool',
-            'Vector': 'Vector',
-            ':class:`Vector`': 'Vector',
-            'Matrix Access': 'Matrix',
-        }
 
         def to_python_type(doc: str) -> str:
             if doc.startswith('string '):
                 return f'str #{doc}'
-            return type_map[doc]
+            return PYTHON_TYPE_MAP[doc]
 
         with open(bpy_pyi, 'w') as w:
             w.write('from typing import Tuple\n')

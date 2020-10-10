@@ -38,7 +38,9 @@ example
 
 ## generate python stub(pyi)
 
-* require bpy install
+* Generate pyi stub from installed bpy
+* Baseed on https://github.com/mutantbob/pycharm-blender
+* Bassed on https://github.com/blender/blender/blob/master/doc/python_api/sphinx_doc_gen.py
 
 ```sh
 python stub_generator.py
@@ -49,6 +51,7 @@ example
 ```sh
 > C:\Python38\python.exe stub_generator.py
 # generate C:\Python38\lib\site-package\blender\bpy\__init__.pyi
+# generate C:\Python38\lib\site-package\blender\mathutils.pyi
 ```
 
 ### use stub on vscode
