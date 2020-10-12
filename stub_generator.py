@@ -182,6 +182,9 @@ class StubModule:
         used = []
 
         def enable(t):
+            '''
+            sort by inheritance
+            '''
             if t.enable_base(used):
                 return True
 
@@ -197,13 +200,13 @@ class StubModule:
             for r in remove:
                 types.remove(r)
 
-    def generate(self, dir: pathlib.Path):
+    def generate(self, dir: pathlib.Path, additional: List[str]):
         bpy_types_pyi: pathlib.Path = dir / self.name.replace(
             '.', '/') / '__init__.py'
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
-            w.write('from typing import Any, Tuple\n')
+            w.write('from typing import Any, Tuple, List\n')
             w.write('from mathutils import Vector, Matrix\n')
             w.write('import collections.abc\n')
             w.write('\n')
@@ -212,6 +215,9 @@ class StubModule:
                 w.write(str(t))
                 w.write('\n')
                 w.write('\n')
+
+            for a in additional:
+                w.write(f'{a}\n')
 
 
 RET = ':return:'
@@ -315,7 +321,7 @@ class StubGenerator:
 
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
-                v.generate(BL_DIR)
+                v.generate(BL_DIR, ['VIEW3D_MT_object: List[Any]'])
             else:
                 print(k)
 
