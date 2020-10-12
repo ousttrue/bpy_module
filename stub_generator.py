@@ -325,11 +325,13 @@ class StubGenerator:
             else:
                 print(k)
 
-        # mathutil
+        # standalone modules
         import mathutils
+        import bpy_extras.io_utils
         self.generate_module(mathutils)
         self.generate_module(bpy.utils)
         self.generate_module(bpy.props)
+        self.generate_module(bpy_extras.io_utils)
 
     def generate_module(self, m: types.ModuleType):
         '''
@@ -351,7 +353,7 @@ import datetime
 
             def write_class(name: str, klass: type):
                 w.write(f'class {name}:\n')
-                counter = 1
+                counter = 0
                 for k, v in klass.__dict__.items():
                     attr_type = type(v)
                     if attr_type == types.GetSetDescriptorType:
@@ -360,7 +362,7 @@ import datetime
                             if m:
                                 t = get_python_type(m.group(1))
                                 w.write(f'    {k}: {t}\n')
-                        counter += 1
+                                counter += 1
                     elif attr_type == types.MethodDescriptorType:
                         if v.__doc__:
                             m = re.search(r':rtype:\s*(.*)$', v.__doc__)
