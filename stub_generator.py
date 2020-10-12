@@ -23,6 +23,13 @@ PYTHON_TYPE_MAP = {
     'datetime.timedelta': 'datetime.timedelta',
     'number or a ``datetime.timedelta`` object': 'float',
     #
+    'function': 'Callable[[], None]',
+    'sequence': 'List[Any]',
+    'class': 'type',
+    'sequence of string tuples or a function': 'List[str]',
+    'string or set': 'str',
+    'type': 'type',
+    #
     'set': 'set',
     'list': 'list',
     #
@@ -47,23 +54,27 @@ PYTHON_TYPE_MAP = {
 }
 
 
-def get_python_type(prop) -> str:
-    if (prop.type == 'collection'):
-        return f"collections.abc.Sequence['{prop.fixed_type.identifier}']"
+def get_python_type(src: str, array_length=0) -> str:
 
-    value_type = PYTHON_TYPE_MAP.get(prop.type, 'Any')
-    if prop.array_length == 0:
+    value_type = PYTHON_TYPE_MAP.get(src, 'Any')
+    if array_length == 0:
         return value_type
 
     if value_type == 'float':
-        if prop.array_length == 9:
+        if array_length == 9:
             return 'Matrix'
-        if prop.array_length == 16:
+        if array_length == 16:
             return 'Matrix'
         return 'Vector'
 
-    values = ', '.join([value_type] * prop.array_length)
+    values = ', '.join([value_type] * array_length)
     return f'Tuple[{values}]'
+
+
+def prop_to_python_type(prop) -> str:
+    if (prop.type == 'collection'):
+        return f"collections.abc.Sequence['{prop.fixed_type.identifier}']"
+    return get_python_type(prop.type, prop.array_length)
 
 
 class StubProperty(NamedTuple):
@@ -75,7 +86,7 @@ class StubProperty(NamedTuple):
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
-        return StubProperty(prop.identifier, get_python_type(prop))
+        return StubProperty(prop.identifier, prop_to_python_type(prop))
 
 
 def format_function(name: str, is_method: bool, params: List[str],
@@ -102,7 +113,7 @@ class StubFunction(NamedTuple):
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
-        ret_values = [get_python_type(v) for v in func.return_values]
+        ret_values = [prop_to_python_type(v) for v in func.return_values]
         args = [StubProperty.from_rna(a) for a in func.args]
         return StubFunction(func.identifier, ret_values, args, is_method)
 
@@ -229,9 +240,12 @@ def parse_function(doc: str) -> Tuple[List[str], List[str]]:
 
     def append(src: str):
         if src.startswith(RT):
-            rtypes.append(src[len(RT):].strip())
+            name, param_type = src[len(TP):].split(':', maxsplit=1)
+            rtypes.append(get_python_type(param_type.strip()))
         elif src.startswith(TP):
-            params.append(src[len(TP):].strip())
+            name, param_type = src[len(TP):].split(':', maxsplit=1)
+            params.append(
+                f'{name.strip()}: {get_python_type(param_type.strip())}')
 
     if params_rtype:
         current = ''
@@ -251,21 +265,9 @@ def parse_function(doc: str) -> Tuple[List[str], List[str]]:
                 current = l
             else:
                 current += l
-                # raise Exception('unknown')
         append(current)
 
     return params, rtypes
-
-    # for l in lines:
-    #     l = l.strip()
-    #     if l.startswith(':type'):
-    #         _type, k, v = l.split(maxsplit=2)
-    #         value_type = PYTHON_TYPE_MAP[v]
-    #         params.append(f'{k} {value_type}')
-    #     elif l.startswith(':rtype:'):
-    #         key = l[7:].strip()
-    #         value_type = PYTHON_TYPE_MAP[key]
-    #         rtypes.append(value_type)
 
 
 class StubGenerator:
@@ -332,16 +334,13 @@ class StubGenerator:
         bpy_pyi: pathlib.Path = BL_DIR / f'{m.__name__.replace(".", "/")}/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
 
-        def to_python_type(doc: str) -> str:
-            if doc.startswith('string '):
-                return f'str #{doc}'
-            return PYTHON_TYPE_MAP[doc]
-
         with open(bpy_pyi, 'w') as w:
-            w.write('''from typing import Tuple, List, Any
+            w.write('''from typing import Tuple, List, Any, Callable
 import bpy
 import datetime
 ''')
+            if m.__name__ != 'mathutils':
+                w.write('from mathutils import Vector\n')
             w.write('\n')
 
             def write_class(name: str, klass: type):
@@ -353,14 +352,14 @@ import datetime
                         if v.__doc__:
                             m = re.search(r':type:\s*(.*)$', v.__doc__)
                             if m:
-                                t = to_python_type(m.group(1))
+                                t = get_python_type(m.group(1))
                                 w.write(f'    {k}: {t}\n')
                         counter += 1
                     elif attr_type == types.MethodDescriptorType:
                         if v.__doc__:
                             m = re.search(r':rtype:\s*(.*)$', v.__doc__)
                             if m:
-                                t = to_python_type(m.group(1))
+                                t = get_python_type(m.group(1))
                                 # w.write(f'    {k}: Callable[[], [{t}]]\n')
                                 w.write(
                                     f'    def {k}(self) -> {t}: ... # noqa\n')
@@ -380,16 +379,22 @@ import datetime
                 w.write('\n')
 
             for name, func in inspect.getmembers(m, inspect.isroutine):
-                if func.__doc__:
-                    if name in ['register_class', 'unregister_class']:
-                        w.write(
-                            format_function(name, False, ['klass: Any'], []))
-                    else:
-                        params, rtypes = parse_function(func.__doc__)
-                        w.write(format_function(name, False, params, rtypes))
-                    w.write('\n')
+                if name.endswith('Property'):
+                    w.write(f'def {name}(**kw) -> Any: ... # noqa\n')
+
                 else:
-                    print(name, func)
+                    if func.__doc__:
+                        if name in ['register_class', 'unregister_class']:
+                            w.write(
+                                format_function(name, False, ['klass: Any'],
+                                                []))
+                        else:
+                            params, rtypes = parse_function(func.__doc__)
+                            w.write(
+                                format_function(name, False, params, rtypes))
+                        w.write('\n')
+                    else:
+                        print(name, func)
 
 
 if __name__ == "__main__":
