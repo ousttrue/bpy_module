@@ -11,11 +11,19 @@ PY_DIR = pathlib.Path(sys.executable).parent
 BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 
 PYTHON_TYPE_MAP = {
+    'str': 'str',
     'string': 'str',
     'boolean': 'bool',
     'bool': 'bool',
     'int': 'int',
     'float': 'float',
+    'int or float.': 'float',
+    'int, float or ``datetime.timedelta``.': 'float',
+    'datetime.timedelta': 'datetime.timedelta',
+    'number or a ``datetime.timedelta`` object': 'float',
+    #
+    'set': 'set',
+    'list': 'list',
     #
     'float triplet': 'Tuple[float, float, float]',
     'Vector': 'Vector',
@@ -29,6 +37,12 @@ PYTHON_TYPE_MAP = {
     '(:class:`Vector`, float) pair': 'Tuple[Vector, float]',
     '(:class:`Quaternion`, float) pair': 'Tuple[Quaternion, float]',
     'tuple': 'List[float]',
+    'tuple of strings': 'List[str]',
+    'list of strings': 'List[str]',
+    'collection of strings or None.': 'List[str]',
+    'generator': 'List[Any]',
+    'tuple pair of functions': 'Any',
+    ':class:`bpy.types.WorkSpaceTool` subclass.': 'bpy.types.WorkSpaceTool',
 }
 
 
@@ -63,6 +77,17 @@ class StubProperty(NamedTuple):
         return StubProperty(prop.identifier, get_python_type(prop))
 
 
+def format_function(name: str, is_method: bool, params: List[str],
+                    ret_types: List[str]) -> str:
+    self_arg = 'self, ' if is_method else ''
+    if not ret_types:
+        return f'def {name}({self_arg}{", ".join(params)}) -> None: ... # noqa'
+    elif len(ret_types) == 1:
+        return f'def {name}({self_arg}{", ".join(params)}) -> {ret_types[0]}: ... # noqa'
+    else:
+        return f'def {name}({self_arg}{", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
+
+
 class StubFunction(NamedTuple):
     name: str
     ret_types: List[str]
@@ -70,14 +95,9 @@ class StubFunction(NamedTuple):
     is_method: bool
 
     def __str__(self) -> str:
-        params = [str(param) for param in self.params]
-        self_arg = 'self, ' if self.is_method else ''
-        if not self.ret_types:
-            return f'def {self.name}({self_arg}{", ".join(params)}) -> None: ... # noqa'
-        elif len(self.ret_types) == 1:
-            return f'def {self.name}({self_arg}{", ".join(params)}) -> {self.ret_types[0]}: ... # noqa'
-        else:
-            return f'def {self.name}({self_arg}{", ".join(params)}) -> Tuple[{", ".join(self.ret_types)}]: ... # noqa'
+        return format_function(self.name, self.is_method,
+                               [str(param) for param in self.params],
+                               self.ret_types)
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
@@ -221,7 +241,7 @@ class StubGenerator:
         bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
         with open(bpy_pyi, 'w') as w:
-            w.write('from . import types\n')
+            w.write('from . import types, utils\n')
             ## add
             w.write('data: types.BlendData\n')
 
@@ -234,13 +254,15 @@ class StubGenerator:
         # mathutil
         import mathutils
         self.generate_module(mathutils)
+        self.generate_module(bpy.utils)
 
     def generate_module(self, m: types.ModuleType):
         '''
         pymodule2sphinx
         py_descr2sphinx
         '''
-        bpy_pyi: pathlib.Path = BL_DIR / f'{m.__name__}/__init__.pyi'
+
+        bpy_pyi: pathlib.Path = BL_DIR / f'{m.__name__.replace(".", "/")}/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
 
         def to_python_type(doc: str) -> str:
@@ -249,7 +271,10 @@ class StubGenerator:
             return PYTHON_TYPE_MAP[doc]
 
         with open(bpy_pyi, 'w') as w:
-            w.write('from typing import Tuple\n')
+            w.write('''from typing import Tuple, List, Any
+import bpy
+import datetime
+''')
             w.write('\n')
 
             def write_class(name: str, klass: type):
@@ -286,6 +311,26 @@ class StubGenerator:
                 write_class(name, klass)
                 w.write('\n')
                 w.write('\n')
+
+            for name, func in inspect.getmembers(m, inspect.isroutine):
+                if func.__doc__:
+                    params = []
+                    rtypes = []
+                    print(name)
+                    for l in func.__doc__.splitlines():
+                        l = l.strip()
+                        if l.startswith(':type'):
+                            _type, k, v = l.split(maxsplit=2)
+                            value_type = PYTHON_TYPE_MAP[v]
+                            params.append(f'{k} {value_type}')
+                        elif l.startswith(':rtype:'):
+                            key = l[7:].strip()
+                            value_type = PYTHON_TYPE_MAP[key]
+                            rtypes.append(value_type)
+                    w.write(format_function(name, False, params, rtypes))
+                    w.write('\n')
+                else:
+                    print(name, func)
 
 
 if __name__ == "__main__":
