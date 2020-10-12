@@ -316,18 +316,20 @@ import datetime
                 if func.__doc__:
                     params = []
                     rtypes = []
-                    print(name)
-                    for l in func.__doc__.splitlines():
-                        l = l.strip()
-                        if l.startswith(':type'):
-                            _type, k, v = l.split(maxsplit=2)
-                            value_type = PYTHON_TYPE_MAP[v]
-                            params.append(f'{k} {value_type}')
-                        elif l.startswith(':rtype:'):
-                            key = l[7:].strip()
-                            value_type = PYTHON_TYPE_MAP[key]
-                            rtypes.append(value_type)
-                    w.write(format_function(name, False, params, rtypes))
+                    if name in ['register_class', 'unregister_class']:
+                        w.write(format_function(name, False, ['klass: Any'], []))
+                    else:
+                        for l in func.__doc__.splitlines():
+                            l = l.strip()
+                            if l.startswith(':type'):
+                                _type, k, v = l.split(maxsplit=2)
+                                value_type = PYTHON_TYPE_MAP[v]
+                                params.append(f'{k} {value_type}')
+                            elif l.startswith(':rtype:'):
+                                key = l[7:].strip()
+                                value_type = PYTHON_TYPE_MAP[key]
+                                rtypes.append(value_type)
+                        w.write(format_function(name, False, params, rtypes))
                     w.write('\n')
                 else:
                     print(name, func)
