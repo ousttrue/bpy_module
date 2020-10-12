@@ -1,10 +1,11 @@
 import io
+from re import split
 import types
 import inspect
 import pathlib
 import sys
 import re
-from typing import List, Dict, NamedTuple, Optional
+from typing import List, Dict, NamedTuple, Optional, Tuple
 
 HERE = pathlib.Path(__file__).parent
 PY_DIR = pathlib.Path(sys.executable).parent
@@ -202,6 +203,71 @@ class StubModule:
                 w.write('\n')
 
 
+RET = ':return:'
+RT = ':rtype:'
+ARG = ':arg '
+TP = ':type '
+
+
+def split_doc(doc: str):
+    splited = re.split(r'\n+', doc, maxsplit=2)
+    num = len(splited)
+    if num == 3:
+        return (x.strip() for x in splited)
+    elif num == 2:
+        return splited[0].strip(), splited[1].strip(), ''
+    else:
+        return splited[0].strip(), '', ''
+
+
+def parse_function(doc: str) -> Tuple[List[str], List[str]]:
+
+    summary, description, params_rtype = split_doc(doc)
+
+    params = []
+    rtypes = []
+
+    def append(src: str):
+        if src.startswith(RT):
+            rtypes.append(src[len(RT):].strip())
+        elif src.startswith(TP):
+            params.append(src[len(TP):].strip())
+
+    if params_rtype:
+        current = ''
+        for l in params_rtype.splitlines():
+            l = l.strip()
+            if l.startswith(RET):
+                append(current)
+                current = l
+            elif l.startswith(RT):
+                append(current)
+                current = l
+            elif l.startswith(ARG):
+                append(current)
+                current = l
+            elif l.startswith(TP):
+                append(current)
+                current = l
+            else:
+                current += l
+                # raise Exception('unknown')
+        append(current)
+
+    return params, rtypes
+
+    # for l in lines:
+    #     l = l.strip()
+    #     if l.startswith(':type'):
+    #         _type, k, v = l.split(maxsplit=2)
+    #         value_type = PYTHON_TYPE_MAP[v]
+    #         params.append(f'{k} {value_type}')
+    #     elif l.startswith(':rtype:'):
+    #         key = l[7:].strip()
+    #         value_type = PYTHON_TYPE_MAP[key]
+    #         rtypes.append(value_type)
+
+
 class StubGenerator:
     '''
     blender/doc/python_api/sphinx_doc_gen.py
@@ -255,6 +321,7 @@ class StubGenerator:
         import mathutils
         self.generate_module(mathutils)
         self.generate_module(bpy.utils)
+        self.generate_module(bpy.props)
 
     def generate_module(self, m: types.ModuleType):
         '''
@@ -314,21 +381,11 @@ import datetime
 
             for name, func in inspect.getmembers(m, inspect.isroutine):
                 if func.__doc__:
-                    params = []
-                    rtypes = []
                     if name in ['register_class', 'unregister_class']:
-                        w.write(format_function(name, False, ['klass: Any'], []))
+                        w.write(
+                            format_function(name, False, ['klass: Any'], []))
                     else:
-                        for l in func.__doc__.splitlines():
-                            l = l.strip()
-                            if l.startswith(':type'):
-                                _type, k, v = l.split(maxsplit=2)
-                                value_type = PYTHON_TYPE_MAP[v]
-                                params.append(f'{k} {value_type}')
-                            elif l.startswith(':rtype:'):
-                                key = l[7:].strip()
-                                value_type = PYTHON_TYPE_MAP[key]
-                                rtypes.append(value_type)
+                        params, rtypes = parse_function(func.__doc__)
                         w.write(format_function(name, False, params, rtypes))
                     w.write('\n')
                 else:
