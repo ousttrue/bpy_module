@@ -8,8 +8,8 @@ import sys
 import re
 from typing import List, Dict, NamedTuple, Optional, Tuple
 
-import bpy_extras.io_utils
 import bpy
+import bpy_extras.io_utils
 import mathutils
 # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
 import imp
