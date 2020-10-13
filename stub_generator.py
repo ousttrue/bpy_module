@@ -381,12 +381,17 @@ class StubGenerator:
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
                 v.generate(
-                    BL_DIR, '''
-T = TypeVar('T')
+                    BL_DIR, '''T = TypeVar('T')
 class bpy_prop_collection(Generic[T]):
     def __len__(self) -> int: ... # noqa
+    def __getitem__(self, key) -> T: ... #noqa
     def find(self, key: str) -> int: ... # noqa
-                ''', ['VIEW3D_MT_object: List[Any]'])
+    def get(key, default=None): ... # noqa
+    def items(): ... # noqa
+    def keys(): ... # noqa
+    def values(): ... # noqa
+
+''', ['VIEW3D_MT_object: List[Any]'])
             else:
                 print(k)
 
