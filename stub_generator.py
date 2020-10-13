@@ -258,7 +258,7 @@ class StubModule:
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
-            w.write('from typing import Any, Tuple, List, Generic, TypeVar\n')
+            w.write('from typing import Any, Tuple, List, Generic, TypeVar, overload\n')
             w.write('from mathutils import Vector, Matrix\n')
             w.write('import collections.abc\n')
             w.write('\n')
@@ -384,7 +384,10 @@ class StubGenerator:
                     BL_DIR, '''T = TypeVar('T')
 class bpy_prop_collection(Generic[T]):
     def __len__(self) -> int: ... # noqa
-    def __getitem__(self, key) -> T: ... #noqa
+    @overload
+    def __getitem__(self, i: int) -> T: ... # noqa
+    @overload
+    def __getitem__(self, s: slice) -> 'bpy_prop_collection[T]': ...
     def find(self, key: str) -> int: ... # noqa
     def get(key, default=None): ... # noqa
     def items(): ... # noqa
