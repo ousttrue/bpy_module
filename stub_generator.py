@@ -179,14 +179,14 @@ class StubStruct:
             sio.write(f'({self.base})')
         sio.write(':\n')
 
-            for prop in self.properties:
-                if self.name == 'RenderEngine' and prop.name == 'render':
-                    # skip
-                    continue
-                sio.write(f'    {prop.name}: {prop.type}\n')
+        for prop in self.properties:
+            if self.name == 'RenderEngine' and prop.name == 'render':
+                # skip
+                continue
+            sio.write(f'    {prop.name}: {prop.type}\n')
 
-            for func in self.methods:
-                sio.write(f'    {func}\n')
+        for func in self.methods:
+            sio.write(f'    {func}\n')
 
         if self.name == 'Object':
             sio.write(f"    children: bpy_prop_collection['Object']\n")
