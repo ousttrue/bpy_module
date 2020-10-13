@@ -71,18 +71,18 @@ def get_python_type(src: str, array_length=0) -> str:
     return f'Tuple[{values}]'
 
 
+REFERENCE_MAP = {}
+
+
 def prop_to_python_type(prop) -> str:
     if (prop.type == 'collection'):
-        return f"collections.abc.Sequence['{prop.fixed_type.identifier}']"
+        return f"@:{prop.fixed_type.identifier}"
     return get_python_type(prop.type, prop.array_length)
 
 
 class StubProperty(NamedTuple):
     name: str
     type: str
-
-    def __str__(self) -> str:
-        return f'{self.name}: {self.type}'
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
@@ -118,13 +118,24 @@ class StubFunction(NamedTuple):
         return StubFunction(func.identifier, ret_values, args, is_method)
 
 
-class StubStruct(NamedTuple):
-    name: str
-    base: Optional[str]
-    properties: List[StubProperty]
-    methods: List[StubFunction]
+class StubStruct:
+    def __init__(self, name: str, base: Optional[str],
+                 properties: List[StubProperty], methods: List[StubFunction],
+                 refs: List[str]):
+        self.name = name
+        self.base = base
+        self.properties = properties
+        self.methods = methods
+        self.refs = refs
 
-    def __str__(self) -> str:
+    def set_prop_type(self, prop_name: str, prop_type: str):
+        for i, prop in enumerate(self.properties):
+            if prop.name == prop_name:
+                self.properties[i] = StubProperty(prop.name, prop_type)
+                print(f'{self.name}.{prop.name} = {prop_type}')
+                return
+
+    def to_str(self, types: List['StubStruct']) -> str:
         sio = io.StringIO()
         sio.write(f'class {self.name}')
         if self.base:
@@ -136,7 +147,9 @@ class StubStruct(NamedTuple):
                 if self.name == 'RenderEngine' and prop.name == 'render':
                     # skip
                     continue
-                sio.write(f'    {prop}\n')
+
+                sio.write(f'    {prop.name}: {prop.type}\n')
+
         if self.methods:
             for func in self.methods:
                 sio.write(f'    {func}\n')
@@ -146,6 +159,8 @@ class StubStruct(NamedTuple):
 
     def enable_base(self, used) -> bool:
         if not self.base:
+            return True
+        if self.base.startswith('bpy_prop_collection['):
             return True
         for u in used:
             if self.base == u.name:
@@ -157,10 +172,15 @@ class StubStruct(NamedTuple):
         base = None
         if s.base:
             base = s.base.identifier
-        return StubStruct(
+        stub = StubStruct(
             s.identifier, base,
             [StubProperty.from_rna(prop) for prop in s.properties],
-            [StubFunction.from_rna(func, True) for func in s.functions])
+            [StubFunction.from_rna(func, True)
+             for func in s.functions], s.references[:]
+            if s.description.startswith('Collection of ') else [])
+        if s.identifier == 'UVLoopLayers':
+            print(s)
+        return stub
 
 
 class StubModule:
@@ -200,22 +220,52 @@ class StubModule:
             for r in remove:
                 types.remove(r)
 
-    def generate(self, dir: pathlib.Path, additional: List[str]):
+    def get_prop(self, k: str, v: str):
+        for t in self.types:
+            if t.name == k:
+                for p in t.properties:
+                    if p.name == v:
+                        return t, p
+        # raise Exception('not found')
+
+    def generate(self, dir: pathlib.Path, prev: str, additional: List[str]):
+        for t in self.types:
+            for ref in t.refs:
+                k, v = ref.split('.', maxsplit=1)
+                found = self.get_prop(k, v)
+                if found:
+                    klass, prop = found
+                    if prop.type[0] == '@':
+                        t.base = f'bpy_prop_collection[{prop.type[2:]}]'
+                        klass.set_prop_type(v, t.name)
+                    # prop.type = t.name
+                    # print(t.name, t.base)
+                else:
+                    pass
+                    # print('not found', k, v)
+
         bpy_types_pyi: pathlib.Path = dir / self.name.replace(
             '.', '/') / '__init__.py'
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
-            w.write('from typing import Any, Tuple, List\n')
+            w.write('from typing import Any, Tuple, List, Generic, TypeVar\n')
             w.write('from mathutils import Vector, Matrix\n')
             w.write('import collections.abc\n')
             w.write('\n')
             w.write('\n')
+
+            # prefix
+            w.write(prev)
+            w.write('\n')
+
+            # types
             for t in self.enumerate():
-                w.write(str(t))
+                w.write(t.to_str(self.types))
                 w.write('\n')
                 w.write('\n')
 
+            # suffix
             for a in additional:
                 w.write(f'{a}\n')
 
@@ -321,7 +371,13 @@ class StubGenerator:
 
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
-                v.generate(BL_DIR, ['VIEW3D_MT_object: List[Any]'])
+                v.generate(
+                    BL_DIR, '''
+T = TypeVar('T')
+class bpy_prop_collection(Generic[T]):
+    def __len__(self) -> int: ... # noqa
+    def find(self, key: str) -> int: ... # noqa
+                ''', ['VIEW3D_MT_object: List[Any]'])
             else:
                 print(k)
 
