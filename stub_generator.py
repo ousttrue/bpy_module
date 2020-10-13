@@ -161,23 +161,15 @@ class StubStruct:
                         if ref.endswith(f'.{prop}'):
                             return t
 
-        def get_prop(k: str, v: str):
-            for t in types:
-                if t.name == k:
-                    for p in t.properties:
-                        if p.name == v:
-                            return t, p
-
         for i in range(len(self.properties)):
             prop = self.properties[i]
             if prop.type[0] == '@':
                 klass = get_ref(self.name, prop.name)
-                bpy_prop_collection = f'bpy_prop_collection[{prop.type[2:]}]'
                 if klass:
-                    klass.base = bpy_prop_collection
+                    klass.base = f"bpy_prop_collection['{prop.type[2:]}']"
                     prop_type = klass.name
                 else:
-                    prop_type = bpy_prop_collection
+                    prop_type = f'bpy_prop_collection[{prop.type[2:]}]'
                 self.properties[i] = StubProperty(prop.name, f"'{prop_type}'")
 
     def to_str(self, types: List['StubStruct']) -> str:
@@ -187,19 +179,21 @@ class StubStruct:
             sio.write(f'({self.base})')
         sio.write(':\n')
 
-        if self.properties:
             for prop in self.properties:
                 if self.name == 'RenderEngine' and prop.name == 'render':
                     # skip
                     continue
-
                 sio.write(f'    {prop.name}: {prop.type}\n')
 
-        if self.methods:
             for func in self.methods:
                 sio.write(f'    {func}\n')
+
+        if self.name == 'Object':
+            sio.write(f"    children: bpy_prop_collection['Object']\n")
+
         if not self.properties and not self.methods:
             sio.write('    pass\n')
+
         return sio.getvalue()
 
     def enable_base(self, used) -> bool:
@@ -218,7 +212,7 @@ class StubStruct:
         base = None
         if s.base:
             base = s.base.identifier
-        if s.identifier == 'Context':
+        if s.identifier == 'Object':
             print(s)
         stub = StubStruct(
             s.identifier, base,
