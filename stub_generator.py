@@ -107,9 +107,10 @@ class StubFunction(NamedTuple):
     is_method: bool
 
     def __str__(self) -> str:
-        return format_function(self.name, self.is_method,
-                               [str(param) for param in self.params],
-                               self.ret_types)
+        return format_function(
+            self.name, self.is_method,
+            [f'{param.name}: {param.type}'
+             for param in self.params], self.ret_types)
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
@@ -134,6 +135,33 @@ class StubStruct:
                 self.properties[i] = StubProperty(prop.name, prop_type)
                 print(f'{self.name}.{prop.name} = {prop_type}')
                 return
+
+    def resolve_collection(self, types: List['StubStruct']):
+        def get_ref(klass: str, prop: str) -> Optional[StubStruct]:
+            for t in types:
+                for ref in t.refs:
+                    if ref.startswith(f'{klass}.'):
+                        if ref.endswith(f'.{prop}'):
+                            return t
+
+        def get_prop(k: str, v: str):
+            for t in types:
+                if t.name == k:
+                    for p in t.properties:
+                        if p.name == v:
+                            return t, p
+
+        for i in range(len(self.properties)):
+            prop = self.properties[i]
+            if prop.type[0] == '@':
+                klass = get_ref(self.name, prop.name)
+                bpy_prop_collection = f'bpy_prop_collection[{prop.type[2:]}]'
+                if klass:
+                    klass.base = bpy_prop_collection
+                    prop_type = klass.name
+                else:
+                    prop_type = bpy_prop_collection
+                self.properties[i] = StubProperty(prop.name, prop_type)
 
     def to_str(self, types: List['StubStruct']) -> str:
         sio = io.StringIO()
@@ -220,29 +248,10 @@ class StubModule:
             for r in remove:
                 types.remove(r)
 
-    def get_prop(self, k: str, v: str):
-        for t in self.types:
-            if t.name == k:
-                for p in t.properties:
-                    if p.name == v:
-                        return t, p
-        # raise Exception('not found')
-
     def generate(self, dir: pathlib.Path, prev: str, additional: List[str]):
+        # resolve collection
         for t in self.types:
-            for ref in t.refs:
-                k, v = ref.split('.', maxsplit=1)
-                found = self.get_prop(k, v)
-                if found:
-                    klass, prop = found
-                    if prop.type[0] == '@':
-                        t.base = f'bpy_prop_collection[{prop.type[2:]}]'
-                        klass.set_prop_type(v, t.name)
-                    # prop.type = t.name
-                    # print(t.name, t.base)
-                else:
-                    pass
-                    # print('not found', k, v)
+            t.resolve_collection(self.types)
 
         bpy_types_pyi: pathlib.Path = dir / self.name.replace(
             '.', '/') / '__init__.py'
