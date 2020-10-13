@@ -1,3 +1,4 @@
+from inspect import isclass, ismodule
 import io
 from re import split
 import types
@@ -6,6 +7,16 @@ import pathlib
 import sys
 import re
 from typing import List, Dict, NamedTuple, Optional, Tuple
+
+import bpy_extras.io_utils
+import bpy
+import mathutils
+# these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
+import imp
+import rna_info
+imp.reload(
+    rna_info
+)  # to avoid repeated arguments in function definitions on second and the next runs - a bug in rna_info.py....
 
 HERE = pathlib.Path(__file__).parent
 PY_DIR = pathlib.Path(sys.executable).parent
@@ -82,7 +93,7 @@ def prop_to_python_type(prop) -> str:
     if prop.type == 'enum':
         key = f'Enum{prop.identifier[0].upper()}{prop.identifier[1:]}'
         ENUM_MAP[key] = prop.enum_items
-        return 'str' #key
+        return 'str'  #key
     return get_python_type(prop.type, prop.array_length)
 
 
@@ -381,13 +392,6 @@ class StubGenerator:
         '''
         generate stubs files for bpy module, mathutils... etc
         '''
-        import bpy
-        # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
-        import imp
-        import rna_info
-        imp.reload(
-            rna_info
-        )  # to avoid repeated arguments in function definitions on second and the next runs - a bug in rna_info.py....
 
         # read all data:
         structs, funcs, ops, props = rna_info.BuildRNAInfo()
@@ -400,7 +404,7 @@ class StubGenerator:
         bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
         with open(bpy_pyi, 'w') as w:
-            w.write('from . import types, utils\n')
+            w.write('from . import types, utils, ops\n')
             ## add
             w.write('data: types.BlendData\n')
             # Changes in Blender will force errors here
@@ -523,20 +527,20 @@ class bpy_prop_collection(Generic[T]):
                 print(k)
 
         # standalone modules
-        import mathutils
-        import bpy_extras.io_utils
         self.generate_module(mathutils)
         self.generate_module(bpy.utils)
         self.generate_module(bpy.props)
+        self.generate_module(bpy.ops, 'bpy.ops')
         self.generate_module(bpy_extras.io_utils)
 
-    def generate_module(self, m: types.ModuleType):
+    def generate_module(self, m: types.ModuleType, module_name=''):
         '''
         pymodule2sphinx
         py_descr2sphinx
         '''
 
-        bpy_pyi: pathlib.Path = BL_DIR / f'{m.__name__.replace(".", "/")}/__init__.pyi'
+        module_name = module_name if module_name else m.__name__
+        bpy_pyi: pathlib.Path = BL_DIR / f'{module_name.replace(".", "/")}/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
 
         with open(bpy_pyi, 'w') as w:
@@ -544,7 +548,7 @@ class bpy_prop_collection(Generic[T]):
 import bpy
 import datetime
 ''')
-            if m.__name__ != 'mathutils':
+            if module_name != 'mathutils':
                 w.write('from mathutils import Vector\n')
             w.write('\n')
 
@@ -578,28 +582,41 @@ import datetime
                 if counter == 0:
                     w.write(f'    pass\n')
 
-            for name, klass in inspect.getmembers(m, inspect.isclass):
-                write_class(name, klass)
-                w.write('\n')
-                w.write('\n')
+            if ismodule(m):
+                for name, klass in inspect.getmembers(m, inspect.isclass):
+                    write_class(name, klass)
+                    w.write('\n')
+                    w.write('\n')
 
-            for name, func in inspect.getmembers(m, inspect.isroutine):
-                if name.endswith('Property'):
-                    w.write(f'def {name}(**kw) -> Any: ... # noqa\n')
+                for name, func in inspect.getmembers(m, inspect.isroutine):
+                    if name.endswith('Property'):
+                        w.write(f'def {name}(**kw) -> Any: ... # noqa\n')
 
-                else:
-                    if func.__doc__:
-                        if name in ['register_class', 'unregister_class']:
-                            w.write(
-                                format_function(name, False, ['klass: Any'],
-                                                []))
-                        else:
-                            params, rtypes = parse_function(func.__doc__)
-                            w.write(
-                                format_function(name, False, params, rtypes))
-                        w.write('\n')
                     else:
-                        print(name, func)
+                        if func.__doc__:
+                            if name in ['register_class', 'unregister_class']:
+                                w.write(
+                                    format_function(name, False,
+                                                    ['klass: Any'], []))
+                            else:
+                                params, rtypes = parse_function(func.__doc__)
+                                w.write(
+                                    format_function(name, False, params,
+                                                    rtypes))
+                            w.write('\n')
+                        else:
+                            print(name, func)
+            else:
+                if str(type(m)) == "<class 'bpy.ops.BPyOps'>":
+                    for key in dir(m):
+                        attr = getattr(m, key)
+                        if str(type(attr)) == "<class 'bpy.ops.BPyOpsSubMod'>":
+                            self.generate_module(attr, f'{module_name}.{key}')
+                            w.write(f'from . import {key}\n')
+                else:
+                    for key in dir(m):
+                        attr = getattr(m, key)
+                        w.write(f'def {key}(*args): ... # noqa\n')
 
 
 if __name__ == "__main__":
