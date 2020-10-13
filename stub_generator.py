@@ -387,7 +387,8 @@ class bpy_prop_collection(Generic[T]):
     @overload
     def __getitem__(self, i: int) -> T: ... # noqa
     @overload
-    def __getitem__(self, s: slice) -> 'bpy_prop_collection[T]': ...
+    def __getitem__(self, s: slice) -> 'bpy_prop_collection[T]': ... # noqa
+    def __iter__(self) -> Iterator[T]: ... # noqa
     def find(self, key: str) -> int: ... # noqa
     def get(key, default=None): ... # noqa
     def items(): ... # noqa
