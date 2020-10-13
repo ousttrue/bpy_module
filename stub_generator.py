@@ -57,6 +57,8 @@ PYTHON_TYPE_MAP = {
 def get_python_type(src: str, array_length=0) -> str:
 
     value_type = PYTHON_TYPE_MAP.get(src, 'Any')
+    if value_type == 'Any':
+        print(src)
     if array_length == 0:
         return value_type
 
@@ -71,12 +73,16 @@ def get_python_type(src: str, array_length=0) -> str:
     return f'Tuple[{values}]'
 
 
-REFERENCE_MAP = {}
+ENUM_MAP = {}
 
 
 def prop_to_python_type(prop) -> str:
-    if (prop.type == 'collection'):
+    if prop.type == 'collection':
         return f"@:{prop.fixed_type.identifier}"
+    if prop.type == 'enum':
+        key = f'Enum{prop.identifier[0].upper()}{prop.identifier[1:]}'
+        ENUM_MAP[key] = prop.enum_items
+        return 'str' #key
     return get_python_type(prop.type, prop.array_length)
 
 
@@ -161,7 +167,7 @@ class StubStruct:
                     prop_type = klass.name
                 else:
                     prop_type = bpy_prop_collection
-                self.properties[i] = StubProperty(prop.name, prop_type)
+                self.properties[i] = StubProperty(prop.name, f"'{prop_type}'")
 
     def to_str(self, types: List['StubStruct']) -> str:
         sio = io.StringIO()
@@ -193,13 +199,16 @@ class StubStruct:
         for u in used:
             if self.base == u.name:
                 return True
-        return False
+
+        return True
 
     @staticmethod
     def from_rna(s) -> 'StubStruct':
         base = None
         if s.base:
             base = s.base.identifier
+        if s.identifier == 'Context':
+            print(s)
         stub = StubStruct(
             s.identifier, base,
             [StubProperty.from_rna(prop) for prop in s.properties],
@@ -209,6 +218,10 @@ class StubStruct:
         if s.identifier == 'UVLoopLayers':
             print(s)
         return stub
+
+
+def escape_enum_name(src: str) -> str:
+    return src.replace(' ', '').replace('-', '')
 
 
 class StubModule:
@@ -258,8 +271,11 @@ class StubModule:
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
         print(bpy_types_pyi)
         with open(bpy_types_pyi, 'w') as w:
-            w.write('from typing import Any, Tuple, List, Generic, TypeVar, overload\n')
+            w.write(
+                'from typing import Any, Tuple, List, Generic, TypeVar, Iterator, overload\n'
+            )
             w.write('from mathutils import Vector, Matrix\n')
+            w.write('from enum import Enum\n')
             w.write('import collections.abc\n')
             w.write('\n')
             w.write('\n')
@@ -267,6 +283,16 @@ class StubModule:
             # prefix
             w.write(prev)
             w.write('\n')
+
+            # enum
+            # for k, v in ENUM_MAP.items():
+            #     w.write(f'class {k}(Enum):\n')
+            #     for e in v:
+            #         prefix = '_' if e[0][0].isdigit() else ''
+            #         w.write(
+            #             f'    {prefix}{escape_enum_name(e[0])} = "{e[0]}"\n')
+            #     w.write('\n')
+            #     w.write('\n')
 
             # types
             for t in self.enumerate():
@@ -377,6 +403,103 @@ class StubGenerator:
             w.write('from . import types, utils\n')
             ## add
             w.write('data: types.BlendData\n')
+            # Changes in Blender will force errors here
+            context_type_map = {
+                # context_member: (RNA type, is_collection)
+                "active_annotation_layer": ("GPencilLayer", False),
+                "active_base": ("ObjectBase", False),
+                "active_bone": ("EditBone", False),
+                "active_gpencil_frame": ("GreasePencilLayer", True),
+                "active_gpencil_layer": ("GPencilLayer", True),
+                "active_node": ("Node", False),
+                "active_object": ("Object", False),
+                "active_operator": ("Operator", False),
+                "active_pose_bone": ("PoseBone", False),
+                "active_editable_fcurve": ("FCurve", False),
+                "annotation_data": ("GreasePencil", False),
+                "annotation_data_owner": ("ID", False),
+                "armature": ("Armature", False),
+                "bone": ("Bone", False),
+                "brush": ("Brush", False),
+                "camera": ("Camera", False),
+                "cloth": ("ClothModifier", False),
+                "collection": ("LayerCollection", False),
+                "collision": ("CollisionModifier", False),
+                "curve": ("Curve", False),
+                "dynamic_paint": ("DynamicPaintModifier", False),
+                "edit_bone": ("EditBone", False),
+                "edit_image": ("Image", False),
+                "edit_mask": ("Mask", False),
+                "edit_movieclip": ("MovieClip", False),
+                "edit_object": ("Object", False),
+                "edit_text": ("Text", False),
+                "editable_bones": ("EditBone", True),
+                "editable_gpencil_layers": ("GPencilLayer", True),
+                "editable_gpencil_strokes": ("GPencilStroke", True),
+                "editable_objects": ("Object", True),
+                "editable_fcurves": ("FCurve", True),
+                "fluid": ("FluidSimulationModifier", False),
+                "gpencil": ("GreasePencil", False),
+                "gpencil_data": ("GreasePencil", False),
+                "gpencil_data_owner": ("ID", False),
+                "hair": ("Hair", False),
+                "image_paint_object": ("Object", False),
+                "lattice": ("Lattice", False),
+                "light": ("Light", False),
+                "lightprobe": ("LightProbe", False),
+                "line_style": ("FreestyleLineStyle", False),
+                "material": ("Material", False),
+                "material_slot": ("MaterialSlot", False),
+                "mesh": ("Mesh", False),
+                "meta_ball": ("MetaBall", False),
+                "object": ("Object", False),
+                "objects_in_mode": ("Object", True),
+                "objects_in_mode_unique_data": ("Object", True),
+                "particle_edit_object": ("Object", False),
+                "particle_settings": ("ParticleSettings", False),
+                "particle_system": ("ParticleSystem", False),
+                "particle_system_editable": ("ParticleSystem", False),
+                "pointcloud": ("PointCloud", False),
+                "pose_bone": ("PoseBone", False),
+                "pose_object": ("Object", False),
+                "scene": ("Scene", False),
+                "sculpt_object": ("Object", False),
+                "selectable_objects": ("Object", True),
+                "selected_bones": ("EditBone", True),
+                "selected_editable_bones": ("EditBone", True),
+                "selected_editable_fcurves": ("FCurve", True),
+                "selected_editable_objects": ("Object", True),
+                "selected_editable_sequences": ("Sequence", True),
+                "selected_nla_strips": ("NlaStrip", True),
+                "selected_nodes": ("Node", True),
+                # "selected_objects": ("Object", True),
+                "selected_pose_bones": ("PoseBone", True),
+                "selected_pose_bones_from_active_object": ("PoseBone", True),
+                "selected_sequences": ("Sequence", True),
+                "selected_visible_fcurves": ("FCurve", True),
+                "sequences": ("Sequence", True),
+                "soft_body": ("SoftBodyModifier", False),
+                "speaker": ("Speaker", False),
+                "texture": ("Texture", False),
+                "texture_slot": ("MaterialTextureSlot", False),
+                "texture_user": ("ID", False),
+                "texture_user_property": ("Property", False),
+                "vertex_paint_object": ("Object", False),
+                "view_layer": ("ViewLayer", False),
+                "visible_bones": ("EditBone", True),
+                "visible_gpencil_layers": ("GPencilLayer", True),
+                "visible_objects": ("Object", True),
+                "visible_pose_bones": ("PoseBone", True),
+                "visible_fcurves": ("FCurve", True),
+                "weight_paint_object": ("Object", False),
+                "volume": ("Volume", False),
+                "world": ("World", False),
+            }
+            w.write('''
+class Context(types.Context):
+    selected_objects: types.bpy_prop_collection[types.Object]
+context: Context
+''')
 
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
