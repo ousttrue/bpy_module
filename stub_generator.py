@@ -1,5 +1,6 @@
 from inspect import isclass, ismodule
 import io
+from io import TextIOWrapper
 from re import split
 import types
 import inspect
@@ -10,6 +11,7 @@ from typing import List, Dict, NamedTuple, Optional, Tuple
 
 import bpy
 import bpy_extras.io_utils
+import bpy_extras.image_utils
 import mathutils
 # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
 import imp
@@ -108,13 +110,16 @@ class StubProperty(NamedTuple):
 
 def format_function(name: str, is_method: bool, params: List[str],
                     ret_types: List[str]) -> str:
-    self_arg = 'self, ' if is_method else ''
+    indent = '    ' if is_method else ''
+    if is_method:
+        params = ['self'] + params
+
     if not ret_types:
-        return f'def {name}({self_arg}{", ".join(params)}) -> None: ... # noqa'
+        return f'{indent}def {name}({", ".join(params)}) -> None: ... # noqa'
     elif len(ret_types) == 1:
-        return f'def {name}({self_arg}{", ".join(params)}) -> {ret_types[0]}: ... # noqa'
+        return f'{indent}def {name}({", ".join(params)}) -> {ret_types[0]}: ... # noqa'
     else:
-        return f'def {name}({self_arg}{", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
+        return f'{indent}def {name}({", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
 
 
 class StubFunction(NamedTuple):
@@ -327,43 +332,85 @@ def split_doc(doc: str):
         return splited[0].strip(), '', ''
 
 
-def parse_function(doc: str) -> Tuple[List[str], List[str]]:
+class ParseFunction:
+    def __init__(self, name: str, doc: str):
+        self.name = name
+        self.params = []
+        self.rtypes = []
 
-    summary, description, params_rtype = split_doc(doc)
+        summary, description, params_rtype = split_doc(doc)
 
-    params = []
-    rtypes = []
+        def append(src: str):
+            if src.startswith(RT):
+                name, param_type = src[len(TP):].split(':', maxsplit=1)
+                self.rtypes.append(get_python_type(param_type.strip()))
+            elif src.startswith(TP):
+                name, param_type = src[len(TP):].split(':', maxsplit=1)
+                self.params.append(
+                    f'{name.strip()}: {get_python_type(param_type.strip())}')
 
-    def append(src: str):
-        if src.startswith(RT):
-            name, param_type = src[len(TP):].split(':', maxsplit=1)
-            rtypes.append(get_python_type(param_type.strip()))
-        elif src.startswith(TP):
-            name, param_type = src[len(TP):].split(':', maxsplit=1)
-            params.append(
-                f'{name.strip()}: {get_python_type(param_type.strip())}')
+        if params_rtype:
+            current = ''
+            for l in params_rtype.splitlines():
+                l = l.strip()
+                if l.startswith(RET):
+                    append(current)
+                    current = l
+                elif l.startswith(RT):
+                    append(current)
+                    current = l
+                elif l.startswith(ARG):
+                    append(current)
+                    current = l
+                elif l.startswith(TP):
+                    append(current)
+                    current = l
+                else:
+                    current += l
+            append(current)
 
-    if params_rtype:
-        current = ''
-        for l in params_rtype.splitlines():
-            l = l.strip()
-            if l.startswith(RET):
-                append(current)
-                current = l
-            elif l.startswith(RT):
-                append(current)
-                current = l
-            elif l.startswith(ARG):
-                append(current)
-                current = l
-            elif l.startswith(TP):
-                append(current)
-                current = l
+    def write_to(self, w: TextIOWrapper, isMethod: bool):
+        w.write(format_function(self.name, isMethod, self.params, self.rtypes))
+
+
+class ParseClass:
+    def __init__(self, name: str, klass: type):
+        self.name = name
+        self.props = []
+        self.methods: List[ParseFunction] = []
+
+        if klass.__doc__:
+            # constructor
+            self.methods.append(ParseFunction('__init__', klass.__doc__))
+
+        for k, v in klass.__dict__.items():
+            if k.startswith('__'):
+                continue
+            attr_type = type(v)
+            if attr_type == types.GetSetDescriptorType:
+                if v.__doc__:
+                    m = re.search(r':type:\s*(.*)$', v.__doc__)
+                    if m:
+                        t = get_python_type(m.group(1))
+                        self.props.append(f'    {k}: {t}\n')
+
+            elif attr_type == types.MethodDescriptorType:
+                if v.__doc__:
+                    self.methods.append(ParseFunction(k, v.__doc__))
             else:
-                current += l
-        append(current)
+                # print(name, k, attr_type, v)
+                pass
 
-    return params, rtypes
+    def write_to(self, w: TextIOWrapper):
+        w.write(f'class {self.name}:\n')
+        if self.methods or self.props:
+            for p in self.props:
+                w.write(p)
+            for m in self.methods:
+                m.write_to(w, True)
+                w.write('\n')
+        else:
+            w.write(f'    pass\n')
 
 
 class StubGenerator:
@@ -526,6 +573,7 @@ class bpy_prop_collection(Generic[T]):
         self.generate_module(bpy.props)
         self.generate_module(bpy.ops, 'bpy.ops')
         self.generate_module(bpy_extras.io_utils)
+        self.generate_module(bpy_extras.image_utils)
 
     def generate_module(self, m: types.ModuleType, module_name=''):
         '''
@@ -546,39 +594,9 @@ import datetime
                 w.write('from mathutils import Vector\n')
             w.write('\n')
 
-            def write_class(name: str, klass: type):
-                w.write(f'class {name}:\n')
-                counter = 0
-                for k, v in klass.__dict__.items():
-                    attr_type = type(v)
-                    if attr_type == types.GetSetDescriptorType:
-                        if v.__doc__:
-                            m = re.search(r':type:\s*(.*)$', v.__doc__)
-                            if m:
-                                t = get_python_type(m.group(1))
-                                w.write(f'    {k}: {t}\n')
-                                counter += 1
-                    elif attr_type == types.MethodDescriptorType:
-                        if v.__doc__:
-                            m = re.search(r':rtype:\s*(.*)$', v.__doc__)
-                            if m:
-                                t = get_python_type(m.group(1))
-                                # w.write(f'    {k}: Callable[[], [{t}]]\n')
-                                w.write(
-                                    f'    def {k}(self) -> {t}: ... # noqa\n')
-
-                    else:
-                        # print(name, k, attr_type, v)
-                        if k == 'to_translation':
-                            print(v)
-                        pass
-
-                if counter == 0:
-                    w.write(f'    pass\n')
-
             if ismodule(m):
                 for name, klass in inspect.getmembers(m, inspect.isclass):
-                    write_class(name, klass)
+                    ParseClass(name, klass).write_to(w)
                     w.write('\n')
                     w.write('\n')
 
@@ -593,10 +611,9 @@ import datetime
                                     format_function(name, False,
                                                     ['klass: Any'], []))
                             else:
-                                params, rtypes = parse_function(func.__doc__)
-                                w.write(
-                                    format_function(name, False, params,
-                                                    rtypes))
+                                func = ParseFunction(name,
+                                                     func.__doc__).write_to(
+                                                         w, False)
                             w.write('\n')
                         else:
                             print(name, func)
