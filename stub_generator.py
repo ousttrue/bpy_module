@@ -191,7 +191,7 @@ class StubStruct:
             sio.write(f'    {prop.name}: {prop.type}\n')
 
         for func in self.methods:
-            sio.write(f'    {func}\n')
+            sio.write(f'{func}\n')
 
         if self.name == 'Object':
             sio.write(f"    children: bpy_prop_collection['Object']\n")
