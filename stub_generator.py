@@ -210,7 +210,7 @@ class StubStruct:
             if self.base == u.name:
                 return True
 
-        return True
+        return False
 
     @staticmethod
     def from_rna(s) -> 'StubStruct':
@@ -285,8 +285,6 @@ class StubModule:
                 'from typing import Any, Tuple, List, Generic, TypeVar, Iterator, overload\n'
             )
             w.write('from mathutils import Vector, Matrix\n')
-            w.write('from enum import Enum\n')
-            w.write('import collections.abc\n')
             w.write('\n')
             w.write('\n')
 
@@ -558,10 +556,10 @@ class bpy_prop_collection(Generic[T]):
     def __getitem__(self, s: slice) -> 'bpy_prop_collection[T]': ... # noqa
     def __iter__(self) -> Iterator[T]: ... # noqa
     def find(self, key: str) -> int: ... # noqa
-    def get(key, default=None): ... # noqa
-    def items(): ... # noqa
-    def keys(): ... # noqa
-    def values(): ... # noqa
+    def get(self, key, default=None): ... # noqa
+    def items(self): ... # noqa
+    def keys(self): ... # noqa
+    def values(self): ... # noqa
 
 ''', ['VIEW3D_MT_object: List[Any]'])
             else:
