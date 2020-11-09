@@ -108,16 +108,23 @@ def prop_to_python_type(prop) -> str:
         key = f'Enum{prop.identifier[0].upper()}{prop.identifier[1:]}'
         ENUM_MAP[key] = prop.enum_items
         return 'str'  #key
-    return get_python_type(prop.type, prop.array_length)
+
+    prop_type = prop.type
+    if prop_type == 'pointer':
+        return prop.fixed_type.identifier
+
+    return get_python_type(prop_type, prop.array_length)
 
 
 class StubProperty(NamedTuple):
     name: str
     type: str
+    pointer: bool = False
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
-        return StubProperty(prop.identifier, prop_to_python_type(prop))
+        return StubProperty(prop.identifier, prop_to_python_type(prop),
+                            prop.type == 'pointer')
 
 
 def format_function(name: str, is_method: bool, params: List[str],
@@ -200,7 +207,10 @@ class StubStruct:
             if self.name == 'RenderEngine' and prop.name == 'render':
                 # skip
                 continue
-            sio.write(f'    {prop.name}: {prop.type}\n')
+            prop_type = prop.type
+            if prop.pointer:
+                prop_type = f"'{prop_type}'"  # quote
+            sio.write(f'    {prop.name}: {prop_type}\n')
 
         for func in self.methods:
             sio.write(f'{func}\n')
@@ -212,6 +222,13 @@ class StubStruct:
             sio.write('    pass\n')
 
         return sio.getvalue()
+
+    def _require_types(self):
+        if self.base:
+            yield self.base
+        for prop in self.properties:
+            if prop.pointer:
+                yield prop.type
 
     def enable_base(self, used) -> bool:
         if not self.base:
