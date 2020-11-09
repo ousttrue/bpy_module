@@ -46,7 +46,10 @@ PYTHON_TYPE_MAP = {
     'set': 'set',
     'list': 'list',
     #
+    'sequence of numbers': 'Sequence[float]',
+    '2d number sequence': 'Sequence[Tuple[float, float]]',
     'float triplet': 'Tuple[float, float, float]',
+    '3d vector': 'Tuple[float, float, float]',
     'Vector': 'Vector',
     ':class:`Vector`': 'Vector',
     'Matrix Access': 'Matrix',
@@ -68,6 +71,15 @@ PYTHON_TYPE_MAP = {
 
 
 def get_python_type(src: str, array_length=0) -> str:
+
+    if not src:
+        return 'Any'
+    if src in ['any', 'pointer']:
+        return 'Any'
+
+    if src.startswith('string in '):
+        # ToDo: ENUM
+        return 'str'
 
     value_type = PYTHON_TYPE_MAP.get(src, 'Any')
     if value_type == 'Any':
@@ -315,6 +327,8 @@ class StubModule:
 
 RET = ':return:'
 RT = ':rtype:'
+# ':rtype: :class:`Color`.. note:: use this to get a copy of a wrapped color withno reference to the original data.'
+RT_PATTERN = re.compile(r':rtype:\s*:class:`(\w+)`')
 ARG = ':arg '
 TP = ':type '
 
@@ -339,11 +353,21 @@ class ParseFunction:
         summary, description, params_rtype = split_doc(doc)
 
         def append(src: str):
-            if src.startswith(RT):
-                name, param_type = src[len(TP):].split(':', maxsplit=1)
-                self.rtypes.append(get_python_type(param_type.strip()))
+            m = RT_PATTERN.match(src)
+            if m:
+                self.rtypes.append(m[1])
+            elif src.startswith(RT):
+                splitted = src[len(RT):].split(':')
+                if len(splitted) == 1:
+                    self.rtypes.append(splitted[0])
+                else:
+                    name = splitted[0]
+                    param_type = splitted[1]
+                    self.rtypes.append(get_python_type(param_type.strip()))
             elif src.startswith(TP):
-                name, param_type = src[len(TP):].split(':', maxsplit=1)
+                splitted = src[len(TP):].split(':')
+                name = splitted[0]
+                param_type = splitted[1]
                 self.params.append(
                     f'{name.strip()}: {get_python_type(param_type.strip())}')
 
