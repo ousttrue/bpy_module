@@ -127,11 +127,21 @@ class StubProperty(NamedTuple):
                             prop.type == 'pointer')
 
 
+def quote(src: str):
+    if get_python_type(src) == 'Any':
+        return f"'{src}'"  # quote
+    else:
+        return src
+
+
 def format_function(name: str, is_method: bool, params: List[str],
                     ret_types: List[str]) -> str:
     indent = '    ' if is_method else ''
     if is_method:
         params = ['self'] + params
+
+    params = [quote(p) for p in params]
+    ret_types = [quote(r) for r in ret_types]
 
     if not ret_types:
         return f'{indent}def {name}({", ".join(params)}) -> None: ... # noqa'
