@@ -369,44 +369,53 @@ class ParseFunction:
 
         summary, description, params_rtype = split_doc(doc)
 
-        def append(src: str):
-            m = RT_PATTERN.match(src)
-            if m:
-                self.rtypes.append(m[1])
-            elif src.startswith(RT):
-                splitted = src[len(RT):].split(':')
-                if len(splitted) == 1:
-                    self.rtypes.append(splitted[0])
-                else:
-                    name = splitted[0]
-                    param_type = splitted[1]
-                    self.rtypes.append(get_python_type(param_type.strip()))
-            elif src.startswith(TP):
-                splitted = src[len(TP):].split(':')
-                name = splitted[0]
-                param_type = splitted[1]
-                self.params.append(
-                    f'{name.strip()}: {get_python_type(param_type.strip())}')
-
         if params_rtype:
             current = ''
             for l in params_rtype.splitlines():
                 l = l.strip()
                 if l.startswith(RET):
-                    append(current)
+                    self._append(current)
                     current = l
                 elif l.startswith(RT):
-                    append(current)
+                    self._append(current)
                     current = l
                 elif l.startswith(ARG):
-                    append(current)
+                    self._append(current)
                     current = l
                 elif l.startswith(TP):
-                    append(current)
+                    self._append(current)
                     current = l
                 else:
                     current += l
-            append(current)
+            self._append(current)
+
+    def _append(self, src: str):
+        if not src:
+            return
+
+        m = RT_PATTERN.match(src)
+        if m:
+            self.rtypes.append(m[1])
+        elif src.startswith(RT):
+            splitted = src[len(RT):].split(':')
+            if len(splitted) == 1:
+                self.rtypes.append(splitted[0])
+            else:
+                name = splitted[0]
+                param_type = splitted[1]
+                self.rtypes.append(get_python_type(param_type.strip()))
+        elif src.startswith(TP):
+            splitted = src[len(TP):].split(':')
+            name = splitted[0]
+            param_type = splitted[1]
+            self.params.append(
+                f'{name.strip()}: {get_python_type(param_type.strip())}')
+        # elif src == ':param rgb: (r, g, b) color values':
+        #     self.params.append('rgb: Tuple[float, float, float]')
+        # elif src == ':param seq: size 3 or 4':
+        #     self.params.append('seq: Sequence[float]')
+        else:
+            a = 0
 
     def write_to(self, w: TextIOWrapper, isMethod: bool):
         w.write(format_function(self.name, isMethod, self.params, self.rtypes))
@@ -420,7 +429,12 @@ class ParseClass:
 
         if klass.__doc__:
             # constructor
-            self.methods.append(ParseFunction('__init__', klass.__doc__))
+            if self.name == 'Quaternion':
+                constructor = ParseFunction('__init__', '')
+                constructor.params.append('*args')
+                self.methods.append(constructor)
+            else:
+                self.methods.append(ParseFunction('__init__', klass.__doc__))
 
         for k, v in klass.__dict__.items():
             if k.startswith('__'):
@@ -625,7 +639,7 @@ class bpy_prop_collection(Generic[T]):
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
 
         with open(bpy_pyi, 'w') as w:
-            w.write('''from typing import Tuple, List, Any, Callable
+            w.write('''from typing import Tuple, List, Any, Callable, Sequence
 import bpy
 import datetime
 ''')
