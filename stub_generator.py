@@ -134,13 +134,21 @@ def quote(src: str):
         return src
 
 
+def quote_param(param: str):
+    try:
+        name, t = param.split(':')
+        return f'{name}: {quote(t.strip())}'
+    except:
+        return param
+
+
 def format_function(name: str, is_method: bool, params: List[str],
                     ret_types: List[str]) -> str:
     indent = '    ' if is_method else ''
+    params = [quote_param(p) for p in params]
     if is_method:
         params = ['self'] + params
 
-    params = [quote(p) for p in params]
     ret_types = [quote(r) for r in ret_types]
 
     if not ret_types:
@@ -690,7 +698,7 @@ import datetime
                 else:
                     for key in dir(m):
                         attr = getattr(m, key)
-                        w.write(f'def {key}(*args): ... # noqa\n')
+                        w.write(f'def {key}(*args, **kw): ... # noqa\n')
 
 
 if __name__ == "__main__":
