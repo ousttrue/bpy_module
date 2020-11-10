@@ -606,7 +606,7 @@ context: Context
 class bpy_prop_collection(Generic[T]):
     def __len__(self) -> int: ... # noqa
     @overload
-    def __getitem__(self, i: int) -> T: ... # noqa
+    def __getitem__(self, i) -> T: ... # noqa
     @overload
     def __getitem__(self, s: slice) -> 'bpy_prop_collection[T]': ... # noqa
     def __iter__(self) -> Iterator[T]: ... # noqa
