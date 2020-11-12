@@ -159,6 +159,17 @@ def format_function(name: str, is_method: bool, params: List[str],
         return f'{indent}def {name}({", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
 
 
+class TypeReference(NamedTuple):
+    name: str
+    is_collection: bool = False
+
+    def __str__(self):
+        if self.is_collection:
+            return f"bpy_prop_collection['{self.name}']"
+        else:
+            return f"'{self.name}'"
+
+
 class StubFunction(NamedTuple):
     name: str
     ret_types: List[str]
@@ -179,13 +190,13 @@ class StubFunction(NamedTuple):
 
 
 class StubStruct:
-    def __init__(self, name: str, base: Optional[str],
+    def __init__(self, name: str, base: Optional[TypeReference],
                  properties: List[StubProperty], methods: List[StubFunction],
                  refs: List[str]):
-        self.name = name
-        self.base = base
-        self.properties = properties
-        self.methods = methods
+        self.name: str = name
+        self.base: Optional[TypeReference] = base
+        self.properties: List[StubProperty] = properties
+        self.methods: List[StubFunction] = methods
         self.refs = refs
 
     def set_prop_type(self, prop_name: str, prop_type: str):
@@ -208,7 +219,7 @@ class StubStruct:
             if prop.type[0] == '@':
                 klass = get_ref(self.name, prop.name)
                 if klass:
-                    klass.base = f"bpy_prop_collection['{prop.type[2:]}']"
+                    klass.base = TypeReference(prop.type[2:], True)
                     prop_type = klass.name
                 else:
                     prop_type = f'bpy_prop_collection[{prop.type[2:]}]'
@@ -251,19 +262,21 @@ class StubStruct:
     def enable_base(self, used) -> bool:
         if not self.base:
             return True
-        if self.base.startswith('bpy_prop_collection['):
+
+        if self.base.name == self.name:
             return True
+
         for u in used:
-            if self.base == u.name:
+            if self.base.name == u.name:
                 return True
 
         return False
 
     @staticmethod
     def from_rna(s) -> 'StubStruct':
-        base = None
+        base: Optional[TypeReference] = None
         if s.base:
-            base = s.base.identifier
+            base = TypeReference(s.base.identifier)
         if s.identifier == 'Object':
             print(s)
         stub = StubStruct(
