@@ -7,7 +7,7 @@ import inspect
 import pathlib
 import sys
 import re
-from typing import List, Dict, NamedTuple, Optional, Tuple
+from typing import List, Dict, NamedTuple, Optional, Any
 
 import bpy
 import bpy_extras.io_utils
@@ -120,11 +120,18 @@ class StubProperty(NamedTuple):
     name: str
     type: str
     pointer: bool = False
+    default: Any = None
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
         return StubProperty(prop.identifier, prop_to_python_type(prop),
-                            prop.type == 'pointer')
+                            prop.type == 'pointer', prop.default_str)
+
+    def to_param(self) -> str:
+        if self.default is None:
+            return f'{self.name}: {quote_param(self.type)}'
+        else:
+            return f'{self.name}: {quote_param(self.type)} = {self.default}'
 
 
 def quote(src: str):
@@ -145,7 +152,7 @@ def quote_param(param: str):
 def format_function(name: str, is_method: bool, params: List[str],
                     ret_types: List[str]) -> str:
     indent = '    ' if is_method else ''
-    params = [quote_param(p) for p in params]
+    # params = [quote_param(p) for p in params]
     if is_method:
         params = ['self'] + params
 
@@ -177,10 +184,9 @@ class StubFunction(NamedTuple):
     is_method: bool
 
     def __str__(self) -> str:
-        return format_function(
-            self.name, self.is_method,
-            [f'{param.name}: {param.type}'
-             for param in self.params], self.ret_types)
+        return format_function(self.name, self.is_method,
+                               [param.to_param() for param in self.params],
+                               self.ret_types)
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
