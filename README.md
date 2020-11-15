@@ -13,6 +13,13 @@
 * git https://git-scm.com/
 * svn https://sliksvn.com/download/
 
+## ToDo
+
+* Vector as sequence
+* Vector operator +
+* Vector assigin = 
+* Matrix operator @
+
 ## usage (build and install bpy)
 
 ```sh

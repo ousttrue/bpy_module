@@ -7,7 +7,7 @@ import inspect
 import pathlib
 import sys
 import re
-from typing import List, Dict, NamedTuple, Optional, Any
+from typing import Collection, DefaultDict, List, Dict, NamedTuple, Optional, Any
 
 import bpy
 import bpy_extras.io_utils
@@ -24,248 +24,311 @@ HERE = pathlib.Path(__file__).parent
 PY_DIR = pathlib.Path(sys.executable).parent
 BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 
-PYTHON_TYPE_MAP = {
-    'str': 'str',
-    'string': 'str',
-    'boolean': 'bool',
-    'bool': 'bool',
-    'int': 'int',
-    'float': 'float',
-    'int or float.': 'float',
-    'int, float or ``datetime.timedelta``.': 'float',
-    'datetime.timedelta': 'datetime.timedelta',
-    'number or a ``datetime.timedelta`` object': 'float',
-    #
-    'function': 'Callable[[], None]',
-    'sequence': 'List[Any]',
-    'class': 'type',
-    'sequence of string tuples or a function': 'List[str]',
-    'string or set': 'str',
-    'type': 'type',
-    #
-    'set': 'set',
-    'list': 'list',
-    #
-    'sequence of numbers': 'Sequence[float]',
-    '2d number sequence': 'Sequence[Tuple[float, float]]',
-    'float triplet': 'Tuple[float, float, float]',
-    '3d vector': 'Tuple[float, float, float]',
-    'Vector': 'Vector',
-    ':class:`Vector`': 'Vector',
-    'Matrix Access': 'Matrix',
-    ':class:`Matrix`': 'Matrix',
-    ':class:`Quaternion`': 'Quaternion',
-    '(:class:`Vector`, :class:`Quaternion`, :class:`Vector`)':
-    'Tuple[Vector, Quaternion, Vector]',
-    ':class:`Euler`': 'Euler',
-    '(:class:`Vector`, float) pair': 'Tuple[Vector, float]',
-    '(:class:`Quaternion`, float) pair': 'Tuple[Quaternion, float]',
-    'tuple': 'List[float]',
-    'tuple of strings': 'List[str]',
-    'list of strings': 'List[str]',
-    'collection of strings or None.': 'List[str]',
-    'generator': 'List[Any]',
-    'tuple pair of functions': 'Any',
-    ':class:`bpy.types.WorkSpaceTool` subclass.': 'bpy.types.WorkSpaceTool',
-}
+
+class PythonType:
+    def __init__(self, name: str):
+        self.name = name
+
+    def __str__(self) -> str:
+        # quoted
+        return f"'{self.name}'"
 
 
-def get_python_type(src: str, array_length=0) -> str:
+class BuiltinType(PythonType):
+    def __init__(self, name: str):
+        super().__init__(name)
 
-    if not src:
-        return 'Any'
-    if src in ['any', 'pointer']:
-        return 'Any'
+    def __str__(self) -> str:
+        return f"{self.name}"
 
-    if src.startswith('string in '):
-        # ToDo: ENUM
-        return 'str'
 
-    value_type = PYTHON_TYPE_MAP.get(src, 'Any')
-    if value_type == 'Any':
+class PropCollectionType(PythonType):
+    def __init__(self, item_type: PythonType):
+        super().__init__(f"bpy_prop_collection[{item_type}]")
+        self.item_type = item_type
+
+    def __str__(self) -> str:
+        return f"'bpy_prop_collection[{self.item_type.name}]'"
+
+
+class NoType(PythonType):
+    def __init__(self):
+        super().__init__('')
+
+
+class AnyType(PythonType):
+    def __init__(self):
+        super().__init__('Any')
+
+
+class UnionType(PythonType):
+    def __init__(self, *args):
+        super().__init__('Union')
+        self.types = args
+
+    def __str__(self) -> str:
+        types = ', '.join([str(t) for t in self.types])
+        return f"'Union[{types}]'"
+
+
+class PythonTypeFactory:
+    def __init__(self):
+        STR = BuiltinType('str')
+        BOOL = BuiltinType('bool')
+        INT = BuiltinType('int')
+        FLOAT = BuiltinType('float')
+        DATETIME = BuiltinType('datetime.timedelta')
+        self.python_type_map: Dict[str, PythonType] = {
+            'str':
+            STR,
+            'string':
+            STR,
+            'boolean':
+            BOOL,
+            'bool':
+            BOOL,
+            'int':
+            INT,
+            'float':
+            FLOAT,
+            'int or float.':
+            UnionType(INT, FLOAT),
+            'int, float or ``datetime.timedelta``.':
+            UnionType(INT, FLOAT, DATETIME),
+            'datetime.timedelta':
+            DATETIME,
+            'number or a ``datetime.timedelta`` object':
+            UnionType(FLOAT, DATETIME)
+        }
+        # #
+        # 'function':
+        # 'Callable[[], None]',
+        # 'sequence':
+        # 'List[Any]',
+        # 'class':
+        # 'type',
+        # 'sequence of string tuples or a function':
+        # 'List[str]',
+        # 'string or set':
+        # 'str',
+        # 'type':
+        # 'type',
+        # #
+        # 'set':
+        # 'set',
+        # 'list':
+        # 'list',
+        # #
+        # 'sequence of numbers':
+        # 'Sequence[float]',
+        # '2d number sequence':
+        # 'Sequence[Tuple[float, float]]',
+        # 'float triplet':
+        # 'Tuple[float, float, float]',
+        # '3d vector':
+        # 'Tuple[float, float, float]',
+        # 'Vector':
+        # 'Vector',
+        # ':class:`Vector`':
+        # 'Vector',
+        # 'Matrix Access':
+        # 'Matrix',
+        # ':class:`Matrix`':
+        # 'Matrix',
+        # ':class:`Quaternion`':
+        # 'Quaternion',
+        # '(:class:`Vector`, :class:`Quaternion`, :class:`Vector`)':
+        # 'Tuple[Vector, Quaternion, Vector]',
+        # ':class:`Euler`':
+        # 'Euler',
+        # '(:class:`Vector`, float) pair':
+        # 'Tuple[Vector, float]',
+        # '(:class:`Quaternion`, float) pair':
+        # 'Tuple[Quaternion, float]',
+        # 'tuple':
+        # 'List[float]',
+        # 'tuple of strings':
+        # 'List[str]',
+        # 'list of strings':
+        # 'List[str]',
+        # 'collection of strings or None.':
+        # 'List[str]',
+        # 'generator':
+        # 'List[Any]',
+        # 'tuple pair of functions':
+        # 'Any',
+        # ':class:`bpy.types.WorkSpaceTool` subclass.':
+        # 'bpy.types.WorkSpaceTool',
+        # }
+        self.enum_map = {}
+        self.any_type = AnyType()
+        self.no_type = NoType()
+        self.str_type = PythonType('str')
+
+    def from_name(self, src: str) -> PythonType:
+        pt = self.python_type_map.get(src)
+        if pt:
+            return pt
+
+        if not src:
+            return self.any_type
+
+        if src == 'any':
+            return self.any_type
+
+        if src.startswith('string in '):
+            # ToDo: ENUM
+            return self.from_name('str')
+
+        pt = self.python_type_map.get(src)
+        if pt is not None:
+            return pt
+
+        pt = PythonType(src)
         print(src)
-    if array_length == 0:
-        return value_type
+        self.python_type_map[src] = pt
+        return pt
 
-    if value_type == 'float':
-        if array_length == 9:
-            return 'Matrix'
-        if array_length == 16:
-            return 'Matrix'
-        return 'Vector'
+        # if value_type == 'Any':
+        #     print(src)
+        # if array_length == 0:
+        #     return value_type
 
-    values = ', '.join([value_type] * array_length)
-    return f'Tuple[{values}]'
+        # if value_type == 'float':
+        #     if array_length == 9:
+        #         return 'Matrix'
+        #     if array_length == 16:
+        #         return 'Matrix'
+        #     return 'Vector'
+
+        # values = ', '.join([value_type] * array_length)
+        # return f'Tuple[{values}]'
+
+        pt = PythonType(name)
+        self.python_type_map[name] = pt
+        return pt
+
+    def from_prop(self, prop) -> PythonType:
+        if prop.type == 'collection':
+            if prop.srna:
+                return self.from_name(prop.srna.identifier)
+            else:
+                item_type = self.from_name(prop.fixed_type.identifier)
+                pt = PropCollectionType(item_type)
+                if pt.name in self.python_type_map:
+                    return self.python_type_map[pt.name]
+
+                self.python_type_map[pt.name] = pt
+                return pt
+
+        if prop.type == 'enum':
+            key = f'Enum{prop.identifier[0].upper()}{prop.identifier[1:]}'
+            self.enum_map[key] = prop.enum_items
+            return self.from_name('str')  #key
+
+        if prop.type == 'pointer':
+            return self.from_name(prop.fixed_type.identifier)
+
+        return self.from_name(prop.type)
 
 
-ENUM_MAP = {}
-
-
-def prop_to_python_type(prop) -> str:
-    if prop.type == 'collection':
-        return f"@:{prop.fixed_type.identifier}"
-    if prop.type == 'enum':
-        key = f'Enum{prop.identifier[0].upper()}{prop.identifier[1:]}'
-        ENUM_MAP[key] = prop.enum_items
-        return 'str'  #key
-
-    prop_type = prop.type
-    if prop_type == 'pointer':
-        return prop.fixed_type.identifier
-
-    return get_python_type(prop_type, prop.array_length)
+FACTORY = PythonTypeFactory()
 
 
 class StubProperty(NamedTuple):
     name: str
-    type: str
-    pointer: bool = False
+    type: PythonType
     default: Any = None
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
-        return StubProperty(prop.identifier, prop_to_python_type(prop),
-                            prop.type == 'pointer', prop.default_str)
+        return StubProperty(prop.identifier, FACTORY.from_prop(prop),
+                            prop.default_str)
 
-    def to_param(self) -> str:
+    def __str__(self) -> str:
         if self.default is None:
-            return f'{self.name}: {quote_param(self.type)}'
+            return f'{self.name}: {self.type}'
         else:
-            return f'{self.name}: {quote_param(self.type)} = {self.default}'
+            return f'{self.name}: {self.type} = {self.default}'
 
 
-def quote(src: str):
-    if get_python_type(src) == 'Any':
-        return f"'{src}'"  # quote
-    else:
-        return src
-
-
-def quote_param(param: str):
-    try:
-        name, t = param.split(':')
-        return f'{name}: {quote(t.strip())}'
-    except:
-        return param
-
-
-def format_function(name: str, is_method: bool, params: List[str],
-                    ret_types: List[str]) -> str:
+def format_function(name: str, is_method: bool, params: List[StubProperty],
+                    ret_types: List[PythonType]) -> str:
     indent = '    ' if is_method else ''
-    # params = [quote_param(p) for p in params]
+    str_ret_types = [str(r) for r in ret_types]
+    str_params = [str(p) for p in params]
     if is_method:
-        params = ['self'] + params
-
-    ret_types = [quote(r) for r in ret_types]
+        str_params = ['self'] + str_params
 
     if not ret_types:
-        return f'{indent}def {name}({", ".join(params)}) -> None: ... # noqa'
+        return f'{indent}def {name}({", ".join(str_params)}) -> None: ... # noqa'
     elif len(ret_types) == 1:
-        return f'{indent}def {name}({", ".join(params)}) -> {ret_types[0]}: ... # noqa'
+        return f'{indent}def {name}({", ".join(str_params)}) -> {str_ret_types[0]}: ... # noqa'
     else:
-        return f'{indent}def {name}({", ".join(params)}) -> Tuple[{", ".join(ret_types)}]: ... # noqa'
-
-
-class TypeReference(NamedTuple):
-    name: str
-    is_collection: bool = False
-
-    def __str__(self):
-        if self.is_collection:
-            return f"bpy_prop_collection['{self.name}']"
-        else:
-            return f"'{self.name}'"
+        return f'{indent}def {name}({", ".join(str_params)}) -> Tuple[{", ".join(str_ret_types)}]: ... # noqa'
 
 
 class StubFunction(NamedTuple):
     name: str
-    ret_types: List[str]
+    ret_types: List[PythonType]
     params: List[StubProperty]
     is_method: bool
 
     def __str__(self) -> str:
-        return format_function(self.name, self.is_method,
-                               [param.to_param() for param in self.params],
+        return format_function(self.name, self.is_method, self.params,
                                self.ret_types)
 
     @staticmethod
     def from_rna(func, is_method: bool) -> 'StubFunction':
-        ret_values = [prop_to_python_type(v) for v in func.return_values]
+        ret_values = [FACTORY.from_prop(v) for v in func.return_values]
         args = [StubProperty.from_rna(a) for a in func.args]
         return StubFunction(func.identifier, ret_values, args, is_method)
 
 
 class StubStruct:
-    def __init__(self, name: str, base: Optional[TypeReference],
+    def __init__(self, name: str, base: Optional[PythonType],
                  properties: List[StubProperty], methods: List[StubFunction],
                  refs: List[str]):
         self.name: str = name
-        self.base: Optional[TypeReference] = base
+        self.base: Optional[PythonType] = base
         self.properties: List[StubProperty] = properties
         self.methods: List[StubFunction] = methods
         self.refs = refs
 
-    def set_prop_type(self, prop_name: str, prop_type: str):
+    def set_prop_type(self, prop_name: str, prop_type: PythonType):
         for i, prop in enumerate(self.properties):
             if prop.name == prop_name:
                 self.properties[i] = StubProperty(prop.name, prop_type)
                 print(f'{self.name}.{prop.name} = {prop_type}')
                 return
 
-    def resolve_collection(self, types: List['StubStruct']):
-        def get_ref(klass: str, prop: str) -> Optional[StubStruct]:
-            for t in types:
-                for ref in t.refs:
-                    if ref.startswith(f'{klass}.'):
-                        if ref.endswith(f'.{prop}'):
-                            return t
-
-        for i in range(len(self.properties)):
-            prop = self.properties[i]
-            if prop.type[0] == '@':
-                klass = get_ref(self.name, prop.name)
-                if klass:
-                    klass.base = TypeReference(prop.type[2:], True)
-                    prop_type = klass.name
-                else:
-                    prop_type = f'bpy_prop_collection[{prop.type[2:]}]'
-                self.properties[i] = StubProperty(prop.name, f"'{prop_type}'")
-
     def to_str(self, types: List['StubStruct']) -> str:
         sio = io.StringIO()
         sio.write(f'class {self.name}')
         if self.base:
-            sio.write(f'({self.base})')
+            base_name = str(self.base).replace("'", '')
+            sio.write(f'({base_name})')
         sio.write(':\n')
 
         for prop in self.properties:
             if self.name == 'RenderEngine' and prop.name == 'render':
                 # skip
                 continue
-            prop_type = prop.type
-            if prop.pointer:
-                prop_type = f"'{prop_type}'"  # quote
-            sio.write(f'    {prop.name}: {prop_type}\n')
+            sio.write(f'    {prop.name}: {prop.type}\n')
 
         for func in self.methods:
             sio.write(f'{func}\n')
 
-        if self.name == 'Object':
-            sio.write(f"    children: bpy_prop_collection['Object']\n")
+        # if self.name == 'Object':
+        #     # hard coding
+        #     sio.write(f"    children: bpy_prop_collection['Object']\n")
 
         if not self.properties and not self.methods:
             sio.write('    pass\n')
 
         return sio.getvalue()
 
-    def _require_types(self):
-        if self.base:
-            yield self.base
-        for prop in self.properties:
-            if prop.pointer:
-                yield prop.type
-
-    def enable_base(self, used) -> bool:
+    def enable_base(self, used: List[PythonType]) -> bool:
         if not self.base:
             return True
 
@@ -273,16 +336,28 @@ class StubStruct:
             return True
 
         for u in used:
-            if self.base.name == u.name:
+            if self.base == u:
+                return True
+            if isinstance(self.base,
+                          PropCollectionType) and self.base.item_type == u:
                 return True
 
         return False
 
     @staticmethod
     def from_rna(s) -> 'StubStruct':
-        base: Optional[TypeReference] = None
+        base: Optional[PythonType] = None
         if s.base:
-            base = TypeReference(s.base.identifier)
+            base = FACTORY.from_name(s.base.identifier)
+        elif s.description.startswith('Collection of '):
+            splited = s.description.split(' ', 2)
+            # item = FACTORY.from_name(s.identifier[0:-1])
+            if s.functions and s.functions[0].return_values:
+                item_type = s.functions[0].return_values[
+                    0].fixed_type.full_path
+                item = FACTORY.from_name(item_type)
+                base = PropCollectionType(item)
+
         if s.identifier == 'Object':
             print(s)
         stub = StubStruct(
@@ -318,30 +393,19 @@ class StubModule:
         types = self.types[:]
         used = []
 
-        def enable(t):
-            '''
-            sort by inheritance
-            '''
-            if t.enable_base(used):
-                return True
-
         while len(types):
             remove = []
             for t in types:
-                if enable(t):
+                if t.enable_base(used):
                     remove.append(t)
                     yield t
             if len(remove) == 0:
                 raise Exception('Error')
-            used += remove
+            used += [FACTORY.from_name(r.name) for r in remove]
             for r in remove:
                 types.remove(r)
 
     def generate(self, dir: pathlib.Path, prev: str, additional: List[str]):
-        # resolve collection
-        for t in self.types:
-            t.resolve_collection(self.types)
-
         bpy_types_pyi: pathlib.Path = dir / self.name.replace(
             '.', '/') / '__init__.py'
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
@@ -357,16 +421,6 @@ class StubModule:
             # prefix
             w.write(prev)
             w.write('\n')
-
-            # enum
-            # for k, v in ENUM_MAP.items():
-            #     w.write(f'class {k}(Enum):\n')
-            #     for e in v:
-            #         prefix = '_' if e[0][0].isdigit() else ''
-            #         w.write(
-            #             f'    {prefix}{escape_enum_name(e[0])} = "{e[0]}"\n')
-            #     w.write('\n')
-            #     w.write('\n')
 
             # types
             for t in self.enumerate():
@@ -404,7 +458,7 @@ class ParseFunction:
         self.params = []
         self.rtypes = []
 
-        summary, description, params_rtype = split_doc(doc)
+        _summary, _description, params_rtype = split_doc(doc)
 
         if params_rtype:
             current = ''
@@ -440,13 +494,13 @@ class ParseFunction:
             else:
                 name = splitted[0]
                 param_type = splitted[1]
-                self.rtypes.append(get_python_type(param_type.strip()))
+                self.rtypes.append(FACTORY.from_name(param_type.strip()))
         elif src.startswith(TP):
             splitted = src[len(TP):].split(':')
             name = splitted[0]
             param_type = splitted[1]
             self.params.append(
-                f'{name.strip()}: {get_python_type(param_type.strip())}')
+                f'{name.strip()}: {FACTORY.from_name(param_type.strip())}')
         # elif src == ':param rgb: (r, g, b) color values':
         #     self.params.append('rgb: Tuple[float, float, float]')
         # elif src == ':param seq: size 3 or 4':
@@ -481,7 +535,7 @@ class ParseClass:
                 if v.__doc__:
                     m = re.search(r':type:\s*(.*)$', v.__doc__)
                     if m:
-                        t = get_python_type(m.group(1))
+                        t = FACTORY.from_name(m.group(1))
                         self.props.append(f'    {k}: {t}\n')
 
             elif attr_type == types.MethodDescriptorType:
@@ -698,8 +752,9 @@ import datetime
                         if func.__doc__:
                             if name in ['register_class', 'unregister_class']:
                                 w.write(
-                                    format_function(name, False,
-                                                    ['klass: Any'], []))
+                                    format_function(name, False, [
+                                        StubProperty('klass', FACTORY.any_type)
+                                    ], []))
                             else:
                                 func = ParseFunction(name,
                                                      func.__doc__).write_to(
