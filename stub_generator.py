@@ -1,3 +1,4 @@
+from builder import python_define
 from inspect import isclass, ismodule
 import io
 from io import TextIOWrapper
@@ -28,6 +29,7 @@ BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 class PythonType:
     def __init__(self, name: str):
         self.name = name
+        self.base: Optional[PythonType] = None
 
     def __str__(self) -> str:
         # quoted
@@ -210,15 +212,16 @@ class PythonTypeFactory:
 
     def from_prop(self, prop) -> PythonType:
         if prop.type == 'collection':
-            if prop.srna:
-                return self.from_name(prop.srna.identifier)
-            else:
-                item_type = self.from_name(prop.fixed_type.identifier)
-                pt = PropCollectionType(item_type)
-                if pt.name in self.python_type_map:
-                    return self.python_type_map[pt.name]
-
+            item_type = self.from_name(prop.fixed_type.identifier)
+            pt = PropCollectionType(item_type)
+            if pt.name not in self.python_type_map:
                 self.python_type_map[pt.name] = pt
+
+            if prop.srna:
+                collection_type = self.from_name(prop.srna.identifier)
+                collection_type.base = pt
+                return collection_type
+            else:
                 return pt
 
         if prop.type == 'enum':
@@ -286,32 +289,30 @@ class StubFunction(NamedTuple):
 
 
 class StubStruct:
-    def __init__(self, name: str, base: Optional[PythonType],
-                 properties: List[StubProperty], methods: List[StubFunction],
-                 refs: List[str]):
-        self.name: str = name
-        self.base: Optional[PythonType] = base
+    def __init__(self, type: PythonType, properties: List[StubProperty],
+                 methods: List[StubFunction], refs: List[str]):
+        self.type = type
         self.properties: List[StubProperty] = properties
         self.methods: List[StubFunction] = methods
         self.refs = refs
 
     def set_prop_type(self, prop_name: str, prop_type: PythonType):
         for i, prop in enumerate(self.properties):
-            if prop.name == prop_name:
+            if prop.type.name == prop_name:
                 self.properties[i] = StubProperty(prop.name, prop_type)
-                print(f'{self.name}.{prop.name} = {prop_type}')
+                print(f'{self.type}.{prop.name} = {prop_type}')
                 return
 
     def to_str(self, types: List['StubStruct']) -> str:
         sio = io.StringIO()
-        sio.write(f'class {self.name}')
-        if self.base:
-            base_name = str(self.base).replace("'", '')
+        sio.write(f'class {self.type.name}')
+        if self.type.base:
+            base_name = str(self.type.base).replace("'", '')
             sio.write(f'({base_name})')
         sio.write(':\n')
 
         for prop in self.properties:
-            if self.name == 'RenderEngine' and prop.name == 'render':
+            if self.type.name == 'RenderEngine' and prop.name == 'render':
                 # skip
                 continue
             sio.write(f'    {prop.name}: {prop.type}\n')
@@ -329,17 +330,18 @@ class StubStruct:
         return sio.getvalue()
 
     def enable_base(self, used: List[PythonType]) -> bool:
-        if not self.base:
+        if not self.type.base:
             return True
 
-        if self.base.name == self.name:
+        if self.type.base.name == self.type.name:
             return True
 
         for u in used:
-            if self.base == u:
+            if self.type.base == u:
                 return True
-            if isinstance(self.base,
-                          PropCollectionType) and self.base.item_type == u:
+            if isinstance(
+                    self.type.base,
+                    PropCollectionType) and self.type.base.item_type == u:
                 return True
 
         return False
@@ -347,24 +349,17 @@ class StubStruct:
     @staticmethod
     def from_rna(s) -> 'StubStruct':
         base: Optional[PythonType] = None
+        self_type = FACTORY.from_name(s.identifier)
         if s.base:
             base = FACTORY.from_name(s.base.identifier)
-        elif s.description.startswith('Collection of '):
-            splited = s.description.split(' ', 2)
-            # item = FACTORY.from_name(s.identifier[0:-1])
-            if s.functions and s.functions[0].return_values:
-                item_type = s.functions[0].return_values[
-                    0].fixed_type.full_path
-                item = FACTORY.from_name(item_type)
-                base = PropCollectionType(item)
+            self_type.base = base
 
         if s.identifier == 'Object':
             print(s)
         stub = StubStruct(
-            s.identifier, base,
-            [StubProperty.from_rna(prop) for prop in s.properties],
-            [StubFunction.from_rna(func, True)
-             for func in s.functions], s.references[:]
+            self_type, [StubProperty.from_rna(prop) for prop in s.properties],
+            [StubFunction.from_rna(func, True) for func in s.functions],
+            s.references[:]
             if s.description.startswith('Collection of ') else [])
         if s.identifier == 'UVLoopLayers':
             print(s)
@@ -401,7 +396,7 @@ class StubModule:
                     yield t
             if len(remove) == 0:
                 raise Exception('Error')
-            used += [FACTORY.from_name(r.name) for r in remove]
+            used += [r.type for r in remove]
             for r in remove:
                 types.remove(r)
 
