@@ -73,6 +73,13 @@ class UnionType(PythonType):
         return f"'Union[{types}]'"
 
 
+class TupleType(PythonType):
+    def __init__(self, item_type: PythonType, length: int):
+        super().__init__('Tuple')
+        self.item_type = item_type
+        self.length = length
+
+
 class PythonTypeFactory:
     def __init__(self):
         STR = BuiltinType('str')
@@ -166,11 +173,22 @@ class PythonTypeFactory:
         self.any_type = AnyType()
         self.no_type = NoType()
         self.str_type = PythonType('str')
+        self.matrix_type = PythonType('Matrix')
+        self.vector_type = PythonType('Vector')
 
-    def from_name(self, src: str) -> PythonType:
+    def from_name(self, src: str, array_length: int = 0) -> PythonType:
         pt = self.python_type_map.get(src)
         if pt:
-            return pt
+            if array_length:
+                if pt.name == 'float':
+                    if array_length == 9:
+                        return self.matrix_type
+                    if array_length == 16:
+                        return self.matrix_type
+                    return self.vector_type
+                return TupleType(pt, array_length)
+            else:
+                return pt
 
         if not src:
             return self.any_type
@@ -182,32 +200,10 @@ class PythonTypeFactory:
             # ToDo: ENUM
             return self.from_name('str')
 
-        pt = self.python_type_map.get(src)
-        if pt is not None:
-            return pt
-
+        # new type
         pt = PythonType(src)
         print(src)
         self.python_type_map[src] = pt
-        return pt
-
-        # if value_type == 'Any':
-        #     print(src)
-        # if array_length == 0:
-        #     return value_type
-
-        # if value_type == 'float':
-        #     if array_length == 9:
-        #         return 'Matrix'
-        #     if array_length == 16:
-        #         return 'Matrix'
-        #     return 'Vector'
-
-        # values = ', '.join([value_type] * array_length)
-        # return f'Tuple[{values}]'
-
-        pt = PythonType(name)
-        self.python_type_map[name] = pt
         return pt
 
     def from_prop(self, prop) -> PythonType:
@@ -232,7 +228,7 @@ class PythonTypeFactory:
         if prop.type == 'pointer':
             return self.from_name(prop.fixed_type.identifier)
 
-        return self.from_name(prop.type)
+        return self.from_name(prop.type, prop.array_length)
 
 
 FACTORY = PythonTypeFactory()
@@ -320,9 +316,9 @@ class StubStruct:
         for func in self.methods:
             sio.write(f'{func}\n')
 
-        # if self.name == 'Object':
-        #     # hard coding
-        #     sio.write(f"    children: bpy_prop_collection['Object']\n")
+        if self.type.name == 'Object':
+            # hard coding
+            sio.write(f"    children: bpy_prop_collection['Object']\n")
 
         if not self.properties and not self.methods:
             sio.write('    pass\n')
