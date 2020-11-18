@@ -237,11 +237,13 @@ FACTORY = PythonTypeFactory()
 class StubProperty(NamedTuple):
     name: str
     type: PythonType
+    description: str
     default: Any = None
 
     @staticmethod
     def from_rna(prop) -> 'StubProperty':
         return StubProperty(prop.identifier, FACTORY.from_prop(prop),
+                            f'{prop.description} {prop.enum_items}',
                             prop.default_str)
 
     def __str__(self) -> str:
@@ -311,6 +313,7 @@ class StubStruct:
             if self.type.name == 'RenderEngine' and prop.name == 'render':
                 # skip
                 continue
+            sio.write(f'    # {prop.description}\n')
             sio.write(f'    {prop.name}: {prop.type}\n')
 
         for func in self.methods:
@@ -401,7 +404,7 @@ class StubModule:
             '.', '/') / '__init__.py'
         bpy_types_pyi.parent.mkdir(parents=True, exist_ok=True)
         print(bpy_types_pyi)
-        with open(bpy_types_pyi, 'w') as w:
+        with open(bpy_types_pyi, 'w', encoding='utf-8') as w:
             w.write(
                 'from typing import Any, Tuple, List, Generic, TypeVar, Iterator, overload\n'
             )
@@ -720,7 +723,7 @@ class bpy_prop_collection(Generic[T]):
         bpy_pyi: pathlib.Path = BL_DIR / f'{module_name.replace(".", "/")}/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(bpy_pyi, 'w') as w:
+        with open(bpy_pyi, 'w', encoding='utf-8') as w:
             w.write('''from typing import Tuple, List, Any, Callable, Sequence
 import bpy
 import datetime
@@ -744,7 +747,8 @@ import datetime
                             if name in ['register_class', 'unregister_class']:
                                 w.write(
                                     format_function(name, False, [
-                                        StubProperty('klass', FACTORY.any_type)
+                                        StubProperty('klass', FACTORY.any_type,
+                                                     '')
                                     ], []))
                             else:
                                 func = ParseFunction(name,
