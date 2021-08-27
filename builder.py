@@ -9,6 +9,7 @@ import glob
 import re
 from typing import List, Tuple
 from contextlib import contextmanager
+import vcenv
 
 GIT_BLENDER = 'git://git.blender.org/blender.git'
 HERE = pathlib.Path(__file__).parent
@@ -105,8 +106,13 @@ class Builder:
     '''
     def __init__(self, tag: str, workspace: pathlib.Path, encoding: str):
         self.tag = tag
+        self.version = self.tag
+        if re.match(r'v\d.\d\d.\d', self.tag):
+
+            self.version = f'blender-{self.tag}-release'
+
         self.workspace = workspace
-        self.build_dir: pathlib.Path = self.workspace / 'build'
+        self.build_dir: pathlib.Path = self.workspace / ('bpy_' + tag)
         self.repository: pathlib.Path = self.workspace / 'blender'
         self.encoding = encoding
 
@@ -125,7 +131,7 @@ class Builder:
 
             with pushd('blender') as current:
                 # switch branch
-                ret, _ = run_command(f'git switch blender-{self.tag}-release')
+                ret, _ = run_command(f'git switch {self.version}')
                 ret, _ = run_command(f'git restore .')
                 ret, _ = run_command(
                     f'git submodule update --init --recursive')
@@ -169,11 +175,12 @@ class Builder:
         '''
         self.build_dir.mkdir(parents=True, exist_ok=True)
         cmake = get_cmake()
+        vcenv.update_environ()
 
         # https://devtalk.blender.org/t/bpy-module-dll-load-failed/11765
         with pushd(self.build_dir):
             run_command(
-                f'{cmake} ../blender {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
+                f'{cmake} -B . -S ../blender -G Ninja {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
             )
 
     def build(self) -> None:
@@ -181,52 +188,41 @@ class Builder:
         run msbuild
         '''
         print('build')
-        msbuild = get_msbuild()
-        # sln = next(self.build_dir.glob('*.sln'))
-        count = multiprocessing.cpu_count()
+        cmake = get_cmake()
+
         with pushd(self.build_dir):
-            vcxproj = pathlib.Path('INSTALL.vcxproj')
-            if not vcxproj.exists():
-                raise f'{vcxproj} not exists'
-            run_command(
-                f'{msbuild} {vcxproj} -maxcpucount:{count} -p:configuration=Release',
-                encoding=self.encoding)
+            run_command(f'{cmake} --build . --config Release',
+                        encoding=self.encoding)
 
     def install(self) -> None:
         '''
         copy bpy.pyd and *.dll and *.py to python lib folder
         '''
-        with pushd(self.build_dir / 'bin/Release'):
-            # src_dll = next(iter(glob.glob('python*.dll')))
-            # dst_dll = BL_DIR / src_dll
-            # if src_dll[6] != str(sys.version_info.major):
-            #     raise Exception()
-            # if src_dll[7] != str(sys.version_info.minor):
-            #     raise Exception()
+        print('install')
+        cmake = get_cmake()
 
-            with (PY_DIR / 'Lib/site-packages/blender.pth').open('w') as w:
-                w.write("blender")
+        with pushd(self.build_dir):
+            run_command(
+                f'{cmake} --install . --config Release --prefix {BL_DIR}',
+                encoding=self.encoding)
 
-            BL_DIR.mkdir(parents=True, exist_ok=True)
+        with (PY_DIR / 'Lib/site-packages/blender.pth').open('w') as w:
+            w.write("blender")
 
-            shutil.copy('bpy.pyd', BL_DIR)
-            for f in glob.glob('*.dll'):
-                if f.startswith('python'):
-                    continue
-                print(f'{f} => {BL_DIR / f}')
-                shutil.copy(f, BL_DIR / f)
-            for f in glob.glob('*.pdb'):
-                print(f'{f} => {BL_DIR / f}')
-                shutil.copy(f, BL_DIR / f)
+        def get_dir():
+            for f in BL_DIR.iterdir():
+                if f.is_dir() and re.match(r'\d.\d+', f.name):
+                    return f
 
-            bl_version = self.tag[1:]
-            dst = PY_DIR / bl_version
+        bl_scripts = get_dir()
+        if bl_scripts:
+            src = bl_scripts
+            dst = PY_DIR / bl_scripts.name
             if dst.exists():
                 print(f'remove {dst}')
                 shutil.rmtree(dst)
-            current = pathlib.Path('.').absolute()
-            print(f'copy {current / bl_version} => {dst}')
-            shutil.copytree(bl_version, dst)
+            print(f'copy {src} to {dst}')
+            shutil.copytree(src, dst)
 
 
 def main():

@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "build 2.83",
+      "name": "build",
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/builder.py",
@@ -15,12 +15,12 @@
         "--build",
         "--install",
         "C:/bpy_module",
-        "v2.83",
+        "master",
       ],
       "console": "integratedTerminal"
     },
     {
-      "name": "stub 2.83",
+      "name": "stub",
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/stub_generator.py",
