@@ -1,40 +1,39 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "build",
-      "type": "python",
-      "request": "launch",
-      "program": "${workspaceFolder}/builder.py",
-      "args": [
-        "--update",
-        // "--clean",
-        "--build",
-        "--install",
-        "C:/bpy_module",
-        "master",
-      ],
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "stub",
-      "type": "python",
-      "request": "launch",
-      "program": "${workspaceFolder}/stub_generator.py",
-      "args": [
-      ],
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "render",
-      "type": "python",
-      "request": "launch",
-      "program": "${workspaceFolder}/render.py",
-      "args": [],
-      "console": "integratedTerminal"
-    },
-  ]
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "build",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/builder.py",
+            "args": [
+                // "--update",
+                // "--clean",
+                "--build",
+                // "--install",
+                "C:/bpy_module",
+                "master",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "stub",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/stub_generator.py",
+            "args": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "render",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/render.py",
+            "args": [],
+            "console": "integratedTerminal"
+        },
+    ]
 }

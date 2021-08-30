@@ -1,7 +1,7 @@
 # bpy_module
 
 * Auto clone, build and install blender python module(bpy)
-* Link to local python(C:\Python38)
+* Link to local python(C:\Python39)
 * generate pyi
 * Blender v2.83
 

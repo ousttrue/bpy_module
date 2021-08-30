@@ -131,8 +131,10 @@ class Builder:
 
             with pushd('blender') as current:
                 # switch branch
-                ret, _ = run_command(f'git switch {self.version}')
+                ret, _ = run_command(f'git switch -f {self.version}')
                 ret, _ = run_command(f'git restore .')
+                if self.version == 'master':
+                    ret, _ = run_command(f'git pull origin {self.version}')
                 ret, _ = run_command(
                     f'git submodule update --init --recursive')
                 ret, _ = run_command(f'git status')
@@ -180,7 +182,7 @@ class Builder:
         # https://devtalk.blender.org/t/bpy-module-dll-load-failed/11765
         with pushd(self.build_dir):
             run_command(
-                f'{cmake} -B . -S ../blender -G Ninja {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
+                f'{cmake} -B . -S ../blender -G Ninja -DCMAKE_BUILD_TYPE=Release {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
             )
 
     def build(self) -> None:
@@ -201,13 +203,28 @@ class Builder:
         print('install')
         cmake = get_cmake()
 
+        shutil.rmtree(BL_DIR, ignore_errors=True)
+
+        with (PY_DIR / 'Lib/site-packages/blender.pth').open('w') as w:
+            w.write("blender")
+
+        BL_DIR.mkdir(parents=True, exist_ok=True)
+
+        # with pushd(self.build_dir / 'bin/Release'):
+        #     # src_dll = next(iter(glob.glob('python*.dll')))
+        #     # dst_dll = BL_DIR / src_dll
+        #     # if src_dll[6] != str(sys.version_info.major):
+        #     #     raise Exception()
+        #     # if src_dll[7] != str(sys.version_info.minor):
+        #     #     raise Exception()
+
+
+        #     shutil.copy('bpy.pyd', BL_DIR)
+
         with pushd(self.build_dir):
             run_command(
                 f'{cmake} --install . --config Release --prefix {BL_DIR}',
                 encoding=self.encoding)
-
-        with (PY_DIR / 'Lib/site-packages/blender.pth').open('w') as w:
-            w.write("blender")
 
         def get_dir():
             for f in BL_DIR.iterdir():
