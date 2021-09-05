@@ -4,8 +4,6 @@ import subprocess
 import sys
 import os
 import shutil
-import multiprocessing
-import glob
 import re
 from typing import List, Tuple
 from contextlib import contextmanager
@@ -40,6 +38,8 @@ def pushd(new_dir):
 def run_command(cmd: str, encoding='utf-8') -> Tuple[int, List[str]]:
     print(f'# {cmd}')
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if not p.stdout:
+        raise Exception("fail to popen")
     lines = []
     for line_bytes in iter(p.stdout.readline, b''):
         line_bytes = line_bytes.rstrip()
@@ -112,9 +112,11 @@ class Builder:
             self.version = f'blender-{self.tag}-release'
 
         self.workspace = workspace
-        self.build_dir: pathlib.Path = self.workspace / ('bpy_' + tag)
+        self.bpy_dir: pathlib.Path = self.workspace / ('bpy_' + tag)
+        self.bin_dir: pathlib.Path = self.workspace / ('bin_' + tag)
         self.repository: pathlib.Path = self.workspace / 'blender'
         self.encoding = encoding
+        self.bin_install_dir = self.workspace / 'install'
 
     def git(self) -> None:
         '''
@@ -132,12 +134,11 @@ class Builder:
             with pushd('blender') as current:
                 # switch branch
                 ret, _ = run_command(f'git switch -f {self.version}')
-                ret, _ = run_command(f'git restore .')
+                ret, _ = run_command('git restore .')
                 if self.version == 'master':
                     ret, _ = run_command(f'git pull origin {self.version}')
-                ret, _ = run_command(
-                    f'git submodule update --init --recursive')
-                ret, _ = run_command(f'git status')
+                ret, _ = run_command('git submodule update --init --recursive')
+                ret, _ = run_command('git status')
 
                 # patch
                 # # uncached vars
@@ -147,12 +148,12 @@ class Builder:
                 lines = []
                 d = str(PY_DIR).replace("\\", "/")
                 v = sys.version_info
-                for l in path.read_text().splitlines():
-                    if re.match(r'^\s*set\(PYTHON_INCLUDE_DIRS ', l):
-                        l = f'set(PYTHON_INCLUDE_DIRS "{d}/include")'
-                    elif re.match(r'^\s*set\(PYTHON_LIBRARIES ', l):
-                        l = f'set(PYTHON_LIBRARIES "{d}/libs/python{v.major}{v.minor}.lib")'
-                    lines.append(l + '\n')
+                for line in path.read_text().splitlines():
+                    if re.match(r'^\s*set\(PYTHON_INCLUDE_DIRS ', line):
+                        line = f'set(PYTHON_INCLUDE_DIRS "{d}/include")'
+                    elif re.match(r'^\s*set\(PYTHON_LIBRARIES ', line):
+                        line = f'set(PYTHON_LIBRARIES "{d}/libs/python{v.major}{v.minor}.lib")'
+                    lines.append(line + '\n')
                 with path.open('w') as w:
                     w.writelines(lines)
 
@@ -165,43 +166,58 @@ class Builder:
         with pushd(self.repository):
             run_command(f'{sys.executable} {make_update_py}')
 
-    def clear_build_dir(self) -> None:
+    def clear(self, dir: pathlib.Path) -> None:
         '''
         remove cmake build_dir
         '''
-        shutil.rmtree(self.build_dir, ignore_errors=True)
+        shutil.rmtree(dir, ignore_errors=True)
 
-    def cmake(self) -> None:
+    def cmake(self, is_bpy: bool) -> pathlib.Path:
         '''
         generate vc solutions to build_dir
         '''
-        self.build_dir.mkdir(parents=True, exist_ok=True)
+        if is_bpy:
+            dir = self.bpy_dir
+            cmake_args = f'{python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON '
+        else:
+            dir = self.bin_dir
+            cmake_args = ''
+        dir.mkdir(parents=True, exist_ok=True)
+
         cmake = get_cmake()
         vcenv.update_environ()
 
         # https://devtalk.blender.org/t/bpy-module-dll-load-failed/11765
-        with pushd(self.build_dir):
+        with pushd(dir):
             run_command(
-                f'{cmake} -B . -S ../blender -G Ninja -DCMAKE_BUILD_TYPE=Release {python_define()} -DWITH_PYTHON_INSTALL=OFF -DWITH_PYTHON_INSTALL_NUMPY=OFF -DWITH_PYTHON_MODULE=ON -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
+                f'{cmake} -B . -S ../blender -G Ninja -DCMAKE_BUILD_TYPE=Release {cmake_args} -DWITH_OPENCOLLADA=OFF -DWITH_AUDASPACE=OFF -DWITH_WINDOWS_BUNDLE_CRT=OFF'
             )
 
-    def build(self) -> None:
+        return dir
+
+    def build(self, dir: pathlib.Path) -> None:
         '''
         run msbuild
         '''
-        print('build')
+        print('build', dir)
         cmake = get_cmake()
 
-        with pushd(self.build_dir):
+        with pushd(dir):
             run_command(f'{cmake} --build . --config Release',
                         encoding=self.encoding)
 
-    def install(self) -> None:
+    def install_bin(self) -> None:
+        cmake = get_cmake()
+        with pushd(self.bin_dir):
+            run_command(
+                f'{cmake} --install . --config Release --prefix {self.bin_install_dir}',
+                encoding=self.encoding)
+
+    def install_bpy(self) -> None:
         '''
         copy bpy.pyd and *.dll and *.py to python lib folder
         '''
         print('install')
-        cmake = get_cmake()
 
         shutil.rmtree(BL_DIR, ignore_errors=True)
 
@@ -218,10 +234,9 @@ class Builder:
         #     # if src_dll[7] != str(sys.version_info.minor):
         #     #     raise Exception()
 
-
         #     shutil.copy('bpy.pyd', BL_DIR)
-
-        with pushd(self.build_dir):
+        cmake = get_cmake()
+        with pushd(self.bpy_dir):
             run_command(
                 f'{cmake} --install . --config Release --prefix {BL_DIR}',
                 encoding=self.encoding)
@@ -256,22 +271,15 @@ def main():
     except FileNotFoundError as ex:
         print(ex)
         return
-    try:
-        get_msbuild()
-    except:
-        print('msbuild not found')
-        return
-    try:
-        print('cmake not found')
-        get_cmake()
-    except:
-        return
+
+    get_msbuild()
+    get_cmake()
 
     parser = argparse.ArgumentParser('blender module builder')
     parser.add_argument("--update", action='store_true')
     parser.add_argument("--clean", action='store_true')
-    parser.add_argument("--build", action='store_true')
-    parser.add_argument("--install", action='store_true')
+    parser.add_argument("--bpy", action='store_true')
+    parser.add_argument("--bin", action='store_true')
     parser.add_argument("workspace")
     parser.add_argument("tag")
     try:
@@ -288,12 +296,16 @@ def main():
         builder.git()
         builder.svn()
     if parsed.clean:
-        builder.clear_build_dir()
-    if parsed.build:
-        builder.cmake()
-        builder.build()
-    if parsed.install:
-        builder.install()
+        builder.clear(builder.bpy_dir)
+        builder.clear(builder.bin_dir)
+    if parsed.bpy:
+        dir = builder.cmake(is_bpy=True)
+        builder.build(dir)
+        builder.install_bpy()
+    if parsed.bin:
+        dir = builder.cmake(is_bpy=False)
+        builder.build(dir)
+        builder.install_bin()
 
 
 if __name__ == '__main__':

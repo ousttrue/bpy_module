@@ -12,8 +12,8 @@
             "args": [
                 // "--update",
                 // "--clean",
-                "--build",
-                // "--install",
+                "--bin",
+                "--bpy",
                 "C:/bpy_module",
                 "master",
             ],
