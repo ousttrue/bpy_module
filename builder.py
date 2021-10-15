@@ -256,6 +256,8 @@ class Builder:
             print(f'copy {src} to {dst}')
             shutil.copytree(src, dst)
 
+        shutil.copy(self.bpy_dir / 'bin/bpy.pyd', BL_DIR)
+
 
 def main():
     if sys.version_info.major != 3:
