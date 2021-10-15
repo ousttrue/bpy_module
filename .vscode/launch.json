@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "build",
+            "name": "master",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/builder.py",
@@ -16,6 +16,21 @@
                 "--bpy",
                 "C:/bpy_module",
                 "master",
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "2.93",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/builder.py",
+            "args": [
+                // "--update",
+                // "--clean",
+                // "--bin",
+                "--bpy",
+                "C:/bpy_module",
+                "v2.93.4",
             ],
             "console": "integratedTerminal"
         },
