@@ -25,12 +25,12 @@
             "request": "launch",
             "program": "${workspaceFolder}/builder.py",
             "args": [
-                // "--update",
+                "--update",
                 // "--clean",
                 // "--bin",
                 "--bpy",
                 "C:/bpy_module",
-                "v2.93.4",
+                "v2.93",
             ],
             "console": "integratedTerminal"
         },

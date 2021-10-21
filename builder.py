@@ -107,8 +107,7 @@ class Builder:
     def __init__(self, tag: str, workspace: pathlib.Path, encoding: str):
         self.tag = tag
         self.version = self.tag
-        if re.match(r'v\d.\d\d.\d', self.tag):
-
+        if re.match(r'v\d.\d\d', self.tag):
             self.version = f'blender-{self.tag}-release'
 
         self.workspace = workspace
@@ -133,7 +132,8 @@ class Builder:
 
             with pushd('blender') as current:
                 # switch branch
-                ret, _ = run_command(f'git switch -f {self.version}')
+                ret, _ = run_command(f'git fetch')
+                ret, _ = run_command(f'git switch -C {self.version}')
                 ret, _ = run_command('git restore .')
                 if self.version == 'master':
                     ret, _ = run_command(f'git pull origin {self.version}')
