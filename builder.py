@@ -106,9 +106,10 @@ class Builder:
     '''
     def __init__(self, tag: str, workspace: pathlib.Path, encoding: str):
         self.tag = tag
-        self.version = self.tag
-        if re.match(r'v\d.\d\d', self.tag):
-            self.version = f'blender-{self.tag}-release'
+        self.branch = self.tag
+        m = re.match(r'v(\d).(\d+).(\d+)', self.tag)
+        if m:
+            self.branch = f'blender-v{m[1]}.{m[2]}-release'
 
         self.workspace = workspace
         self.bpy_dir: pathlib.Path = self.workspace / ('bpy_' + tag)
@@ -133,10 +134,12 @@ class Builder:
             with pushd('blender') as current:
                 # switch branch
                 ret, _ = run_command(f'git fetch')
-                ret, _ = run_command(f'git switch -C {self.version}')
+                ret, _ = run_command(f'git switch -C {self.branch}')
                 ret, _ = run_command('git restore .')
-                if self.version == 'master':
-                    ret, _ = run_command(f'git pull origin {self.version}')
+                if self.branch == 'master':
+                    ret, _ = run_command(f'git pull origin master')
+                else:
+                    ret, _ = run_command(f'git reset tags/{self.tag} --hard')
                 ret, _ = run_command('git submodule update --init --recursive')
                 ret, _ = run_command('git status')
 

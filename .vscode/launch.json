@@ -26,11 +26,11 @@
             "program": "${workspaceFolder}/builder.py",
             "args": [
                 "--update",
-                // "--clean",
+                "--clean",
                 // "--bin",
                 "--bpy",
                 "C:/bpy_module",
-                "v2.93",
+                "v2.93.4",
             ],
             "console": "integratedTerminal"
         },
