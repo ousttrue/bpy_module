@@ -13,6 +13,19 @@
 * git https://git-scm.com/
 * svn https://sliksvn.com/download/
 
+## memo
+
+* blender
+* lib
+* git worktree
+* branch: v2.93-release
+  * tag: v2.93.0
+  * tag: v2.93.1
+  * tag: v2.93.2
+  * tag: v2.93.3
+  * tag: v2.93.4
+  * tag: v2.93.5
+
 ## ToDo
 
 * Vector as sequence
