@@ -25,13 +25,13 @@ def python_define():
 @contextmanager
 def pushd(new_dir):
     previous_dir = os.getcwd()
-    print(f'pushd: {new_dir}')
+    # print(f'pushd: {new_dir}')
     pathlib.Path(new_dir).mkdir(exist_ok=True, parents=True)
     os.chdir(new_dir)
     try:
         yield pathlib.Path('.').absolute()
     finally:
-        print(f'popd: {previous_dir}')
+        # print(f'popd: {previous_dir}')
         os.chdir(previous_dir)
 
 
@@ -119,7 +119,7 @@ class Builder:
         self.encoding = encoding
         self.bin_install_dir = self.workspace / 'install'
 
-    def git(self) -> None:
+    def git(self, is_master: bool = False) -> None:
         '''
         clone repository and checkout specific tag version
         '''
@@ -132,12 +132,15 @@ class Builder:
                 if ret:
                     raise Exception(ret)
 
+            branch = self.branch
+            if is_master:
+                branch = 'master'
             with pushd('blender') as current:
                 # switch branch
                 ret, _ = run_command(f'git fetch')
-                ret, _ = run_command(f'git switch -C {self.branch}')
+                ret, _ = run_command(f'git switch -C {branch}')
                 ret, _ = run_command('git restore .')
-                if self.branch == 'master':
+                if branch == 'master':
                     ret, _ = run_command(f'git pull origin master')
                 else:
                     ret, _ = run_command(f'git reset tags/{self.tag} --hard')
@@ -169,6 +172,16 @@ class Builder:
         make_update_py = self.repository / 'build_files/utils/make_update.py'
         with pushd(self.repository):
             run_command(f'{sys.executable} {make_update_py}')
+
+        # with pushd(self.workspace / 'lib/win64_vc15'):
+        #     run_command(
+        #         'svn --non-interactive cleanup .'
+        #     )
+        #     run_command(
+        #         'svn --non-interactive switch https://svn.blender.org/svnroot/bf-blender/tags/blender-2.93-release/lib/win64_vc15 .'
+        #     )
+        #     run_command(
+        #         'svn --non-interactive update .'
 
     def clear(self, dir: pathlib.Path) -> None:
         '''
@@ -301,8 +314,9 @@ def main():
     builder = Builder(parsed.tag, pathlib.Path(parsed.workspace),
                       get_console_encoding())
     if parsed.update:
-        builder.git()
+        builder.git(is_master=True)
         builder.svn()
+        builder.git()
     if parsed.clean:
         builder.clear(builder.bpy_dir)
         builder.clear(builder.bin_dir)
