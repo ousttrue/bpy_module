@@ -51,6 +51,8 @@ def run_command(cmd: str, encoding='utf-8') -> Tuple[int, List[str]]:
         print(line)
         lines.append(line)
     p.wait()
+    if p.returncode != 0:
+        raise Exception(f'returncode: {p.returncode}')
     return p.returncode, lines
 
 
@@ -128,24 +130,22 @@ class Builder:
             if not self.repository.exists():
                 print(f'clone: {self.repository}')
                 # clone
-                ret, _ = run_command(f'git clone {GIT_BLENDER} blender')
-                if ret:
-                    raise Exception(ret)
+                run_command(f'git clone {GIT_BLENDER} blender')
 
             branch = self.branch
             if is_master:
                 branch = 'master'
             with pushd('blender') as current:
                 # switch branch
-                ret, _ = run_command(f'git fetch')
-                ret, _ = run_command(f'git switch -C {branch}')
-                ret, _ = run_command('git restore .')
+                run_command('git fetch --tags')
+                run_command(f'git switch -C {branch}')
+                run_command('git restore .')
                 if branch == 'master':
-                    ret, _ = run_command(f'git pull origin master')
+                    run_command('git pull origin master')
                 else:
-                    ret, _ = run_command(f'git reset tags/{self.tag} --hard')
-                ret, _ = run_command('git submodule update --init --recursive')
-                ret, _ = run_command('git status')
+                    run_command(f'git reset tags/{self.tag} --hard')
+                run_command('git submodule update --init --recursive')
+                run_command('git status')
 
                 # patch
                 # # uncached vars
@@ -220,10 +220,8 @@ class Builder:
         cmake = get_cmake()
 
         with pushd(dir):
-            ret, _ = run_command(f'{cmake} --build . --config Release',
-                                 encoding=self.encoding)
-            if ret:
-                raise Exception()
+            run_command(f'{cmake} --build . --config Release',
+                        encoding=self.encoding)
 
     def install_bin(self) -> None:
         cmake = get_cmake()
@@ -283,12 +281,12 @@ def main():
         raise Exception()
 
     try:
-        ret, _ = run_command('git --version')
+        run_command('git --version')
     except FileNotFoundError as ex:
         print(ex)
         return
     try:
-        ret, _ = run_command('svn --version --quiet')
+        run_command('svn --version --quiet')
     except FileNotFoundError as ex:
         print(ex)
         return
@@ -314,9 +312,8 @@ def main():
     builder = Builder(parsed.tag, pathlib.Path(parsed.workspace),
                       get_console_encoding())
     if parsed.update:
-        builder.git(is_master=True)
-        builder.svn()
         builder.git()
+        builder.svn()
     if parsed.clean:
         builder.clear(builder.bpy_dir)
         builder.clear(builder.bin_dir)
