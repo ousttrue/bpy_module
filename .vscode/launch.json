@@ -20,7 +20,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "2.93",
+            "name": "2.93.0",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/builder.py",
@@ -30,7 +30,7 @@
                 // "--bin",
                 "--bpy",
                 "C:/bpy_module",
-                "v2.93.4",
+                "v2.93.0",
             ],
             "console": "integratedTerminal"
         },

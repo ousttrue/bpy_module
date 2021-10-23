@@ -50,6 +50,7 @@ def run_command(cmd: str, encoding='utf-8') -> Tuple[int, List[str]]:
             line = line_bytes.decode(encoding)
         print(line)
         lines.append(line)
+    p.wait()
     return p.returncode, lines
 
 
@@ -206,8 +207,10 @@ class Builder:
         cmake = get_cmake()
 
         with pushd(dir):
-            run_command(f'{cmake} --build . --config Release',
-                        encoding=self.encoding)
+            ret, _ = run_command(f'{cmake} --build . --config Release',
+                                 encoding=self.encoding)
+            if ret:
+                raise Exception()
 
     def install_bin(self) -> None:
         cmake = get_cmake()
