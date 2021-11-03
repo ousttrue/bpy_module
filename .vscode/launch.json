@@ -50,5 +50,15 @@
             "args": [],
             "console": "integratedTerminal"
         },
+        {
+            "name": "doit",
+            "type": "python",
+            "request": "launch",
+            "module": "doit",
+            "args": [
+                "select_tag:v2.93.5"
+            ],
+            "console": "integratedTerminal"
+        },
     ]
 }
