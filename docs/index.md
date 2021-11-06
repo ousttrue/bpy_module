@@ -1,16 +1,13 @@
-<!-- .. bpy documentation master file, created by -->
-<!--    sphinx-quickstart on Sun Nov  7 01:15:51 2021. -->
-<!--    You can adapt this file completely to your liking, but it should at least -->
-<!--    contain the root `toctree` directive. -->
+# bpy_module
 
-Welcome to bpy's documentation!
-===============================
+standalone の blender モジュール (`bpy.pyd`) のビルドと stub 作成について。
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 bpy/source
+bpy/build
+bpy/stub
 ```
-
 
 Indices and tables
 ==================
