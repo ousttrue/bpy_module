@@ -33,7 +33,12 @@
 * Vector assigin = 
 * Matrix operator @
 
-## usage (build and install bpy)
+## doit version
+
+```sh
+```
+
+## [obsolete] usage (build and install bpy)
 
 ```sh
 python builder.py {WORKSPACE_FOLDER} {tag} --update --clean --build --install --stubs
