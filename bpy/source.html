@@ -8,7 +8,7 @@
 
     <title>source &#8212; bpy_module  ドキュメント</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pyramid.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
     <script src="../_static/jquery.js"></script>
     <script src="../_static/underscore.js"></script>
@@ -18,27 +18,39 @@
     <link rel="search" title="検索" href="../search.html" />
     <link rel="next" title="build" href="build.html" />
     <link rel="prev" title="bpy_module" href="../index.html" />
-   
-  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
-  
-  
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Neuton&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nobile:regular,italic,bold,bolditalic&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<!--[if lte IE 6]>
+<link rel="stylesheet" href="../_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
+<![endif]-->
 
   </head><body>
-  
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="build.html" title="build"
+             accesskey="N">次へ</a> |</li>
+        <li class="right" >
+          <a href="../index.html" title="bpy_module"
+             accesskey="P">前へ</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">bpy_module  ドキュメント</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">source</a></li> 
+      </ul>
+    </div>  
 
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
-          
-
           <div class="body" role="main">
             
   <section class="tex2jax_ignore mathjax_ignore" id="source">
 <h1>source<a class="headerlink" href="#source" title="このヘッドラインへのパーマリンク">¶</a></h1>
-<p>bpy module のソース。</p>
-<section id="pyinit-bpy">
-<h2>PyInit_bpy<a class="headerlink" href="#pyinit-bpy" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<p><a class="reference external" href="https://github.com/blender/blender">https://github.com/blender/blender</a></p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">+-------+</span>
 <span class="o">|</span><span class="n">blender</span><span class="o">|</span>
 <span class="o">|+---+</span>  <span class="o">|</span>
@@ -57,18 +69,214 @@
 </pre></div>
 </div>
 <p>に捻じ曲げるのに初期化がトリッキーになっている。</p>
+<section id="entrypoint-pyinit-bpy">
+<h2>entrypoint: PyInit_bpy<a class="headerlink" href="#entrypoint-pyinit-bpy" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<p>python の nativemodule の命名規則により <code class="docutils literal notranslate"><span class="pre">PyInit_{MODULE_NAME}</span></code>。</p>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">bpy</span>
+</pre></div>
+</div>
+<p>でこの関数が呼ばれる。</p>
 <p><code class="docutils literal notranslate"><span class="pre">source/blender/python/intern/bpy_interface.c</span></code></p>
 <div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">PyMODINIT_FUNC</span> <span class="nf">PyInit_bpy</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="n">PyObject</span> <span class="o">*</span><span class="n">bpy_proxy</span> <span class="o">=</span> <span class="n">PyModule_Create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bpy_proxy_def</span><span class="p">);</span>
+
+  <span class="c1">// 実際にモジュール(blender全体)を初期化するコールバック</span>
+  <span class="n">dealloc_obj_Type</span><span class="p">.</span><span class="n">tp_dealloc</span> <span class="o">=</span> <span class="n">dealloc_obj_dealloc</span><span class="p">;</span>
+
+  <span class="c1">// dummy を返す</span>
+  <span class="k">return</span> <span class="n">bpy_proxy</span><span class="p">;</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">main_python_enter</span></code> =&gt; <code class="docutils literal notranslate"><span class="pre">main</span></code></p>
-<p><code class="docutils literal notranslate"><span class="pre">source/blender/python/intern/bpy.c</span></code></p>
-<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span> <span class="nf">BPy_init_modules</span><span class="p">(</span><span class="k">struct</span> <span class="n">bContext</span> <span class="o">*</span><span class="n">C</span><span class="p">)</span>
+<p>👇</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="cm">/* use our own dealloc so we can free a property if we use one */</span>
+<span class="k">static</span> <span class="kt">void</span> <span class="nf">dealloc_obj_dealloc</span><span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="n">self</span><span class="p">)</span>
 <span class="p">{</span>
-    <span class="c1">// import 時の初期化処理</span>
+  <span class="n">bpy_module_delay_init</span><span class="p">(((</span><span class="n">dealloc_obj</span> <span class="o">*</span><span class="p">)</span><span class="n">self</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">mod</span><span class="p">);</span>
+
+  <span class="cm">/* NOTE: for subclassed PyObjects we can&#39;t just call PyObject_DEL() directly or it will crash. */</span>
+  <span class="n">dealloc_obj_Type</span><span class="p">.</span><span class="n">tp_free</span><span class="p">(</span><span class="n">self</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>👇</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span> <span class="nf">bpy_module_delay_init</span><span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="n">bpy_proxy</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">const</span> <span class="kt">int</span> <span class="n">argc</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+
+  <span class="cm">/* updating the module dict below will lose the reference to __file__ */</span>
+  <span class="n">PyObject</span> <span class="o">*</span><span class="n">filename_obj</span> <span class="o">=</span> <span class="n">PyModule_GetFilenameObject</span><span class="p">(</span><span class="n">bpy_proxy</span><span class="p">);</span>
+
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">filename_rel</span> <span class="o">=</span> <span class="n">PyUnicode_AsUTF8</span><span class="p">(</span><span class="n">filename_obj</span><span class="p">);</span> <span class="cm">/* can be relative */</span>
+  <span class="kt">char</span> <span class="n">filename_abs</span><span class="p">[</span><span class="mi">1024</span><span class="p">];</span>
+
+  <span class="n">BLI_strncpy</span><span class="p">(</span><span class="n">filename_abs</span><span class="p">,</span> <span class="n">filename_rel</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">filename_abs</span><span class="p">));</span>
+  <span class="n">BLI_path_abs_from_cwd</span><span class="p">(</span><span class="n">filename_abs</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">filename_abs</span><span class="p">));</span>
+  <span class="n">Py_DECREF</span><span class="p">(</span><span class="n">filename_obj</span><span class="p">);</span>
+
+  <span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">filename_abs</span><span class="p">;</span>
+  <span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+  <span class="c1">// printf(&quot;module found %s\n&quot;, argv[0]);</span>
+
+  <span class="n">main_python_enter</span><span class="p">(</span><span class="n">argc</span><span class="p">,</span> <span class="n">argv</span><span class="p">);</span> <span class="c1">// 👉 main</span>
+
+  <span class="cm">/* initialized in BPy_init_modules() */</span>
+  <span class="n">PyDict_Update</span><span class="p">(</span><span class="n">PyModule_GetDict</span><span class="p">(</span><span class="n">bpy_proxy</span><span class="p">),</span> <span class="n">PyModule_GetDict</span><span class="p">(</span><span class="n">bpy_package_py</span><span class="p">));</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="main">
+<h2>main<a class="headerlink" href="#main" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">source/creator/creator.c</span></code></p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span>
+<span class="cp">#ifdef WIN32</span>
+         <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">UNUSED</span><span class="p">(</span><span class="n">argv_c</span><span class="p">)</span>
+<span class="cp">#else</span>
+         <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span>
+<span class="cp">#endif</span>
+<span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">bContext</span> <span class="o">*</span><span class="n">C</span><span class="p">;</span>
+
+  <span class="n">WM_init</span><span class="p">(</span><span class="n">C</span><span class="p">,</span> <span class="n">argc</span><span class="p">,</span> <span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="p">)</span><span class="n">argv</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="wm-init">
+<h2>WM_init<a class="headerlink" href="#wm-init" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">source/blender/windowmanager/intern/wm_init_exit.c</span></code></p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span> <span class="nf">WM_init</span><span class="p">(</span><span class="n">bContext</span> <span class="o">*</span><span class="n">C</span><span class="p">,</span> <span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">BPY_python_start</span><span class="p">(</span><span class="n">C</span><span class="p">,</span> <span class="n">argc</span><span class="p">,</span> <span class="n">argv</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="bpy-python-start">
+<h2>BPY_python_start<a class="headerlink" href="#bpy-python-start" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">source/blender/python/intern/bpy_interface.c</span></code></p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="cm">/* call BPY_context_set first */</span>
+<span class="kt">void</span> <span class="nf">BPY_python_start</span><span class="p">(</span><span class="n">bContext</span> <span class="o">*</span><span class="n">C</span><span class="p">,</span> <span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="cm">/* Defines `bpy.*` and lets us import it. */</span>
+  <span class="n">BPy_init_modules</span><span class="p">(</span><span class="n">C</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="bpy-init-modules">
+<h2>BPy_init_modules<a class="headerlink" href="#bpy-init-modules" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">source/blender/python/intern/bpy.c</span></code></p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="cm">/******************************************************************************</span>
+<span class="cm"> * Description: Creates the bpy module and adds it to sys.modules for importing</span>
+<span class="cm"> ******************************************************************************/</span>
+<span class="kt">void</span> <span class="nf">BPy_init_modules</span><span class="p">(</span><span class="k">struct</span> <span class="n">bContext</span> <span class="o">*</span><span class="n">C</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="n">PointerRNA</span> <span class="n">ctx_ptr</span><span class="p">;</span>
+  <span class="n">PyObject</span> <span class="o">*</span><span class="n">mod</span><span class="p">;</span>
+
+  <span class="cm">/* Needs to be first since this dir is needed for future modules */</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="k">const</span> <span class="n">modpath</span> <span class="o">=</span> <span class="n">BKE_appdir_folder_id</span><span class="p">(</span><span class="n">BLENDER_SYSTEM_SCRIPTS</span><span class="p">,</span> <span class="s">&quot;modules&quot;</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">modpath</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// printf(&quot;bpy: found module path &#39;%s&#39;.\n&quot;, modpath);</span>
+    <span class="n">PyObject</span> <span class="o">*</span><span class="n">sys_path</span> <span class="o">=</span> <span class="n">PySys_GetObject</span><span class="p">(</span><span class="s">&quot;path&quot;</span><span class="p">);</span> <span class="cm">/* borrow */</span>
+    <span class="n">PyObject</span> <span class="o">*</span><span class="n">py_modpath</span> <span class="o">=</span> <span class="n">PyUnicode_FromString</span><span class="p">(</span><span class="n">modpath</span><span class="p">);</span>
+    <span class="n">PyList_Insert</span><span class="p">(</span><span class="n">sys_path</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">py_modpath</span><span class="p">);</span> <span class="cm">/* add first */</span>
+    <span class="n">Py_DECREF</span><span class="p">(</span><span class="n">py_modpath</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="k">else</span> <span class="p">{</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;bpy: couldn&#39;t find &#39;scripts/modules&#39;, blender probably won&#39;t start.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="cm">/* stand alone utility modules not related to blender directly */</span>
+  <span class="n">IDProp_Init_Types</span><span class="p">();</span> <span class="cm">/* not actually a submodule, just types */</span>
+  <span class="n">IDPropertyUIData_Init_Types</span><span class="p">();</span>
+<span class="cp">#ifdef WITH_FREESTYLE</span>
+  <span class="n">Freestyle_Init</span><span class="p">();</span>
+<span class="cp">#endif</span>
+
+  <span class="n">mod</span> <span class="o">=</span> <span class="n">PyModule_New</span><span class="p">(</span><span class="s">&quot;_bpy&quot;</span><span class="p">);</span>
+
+  <span class="cm">/* add the module so we can import it */</span>
+  <span class="n">PyDict_SetItemString</span><span class="p">(</span><span class="n">PyImport_GetModuleDict</span><span class="p">(),</span> <span class="s">&quot;_bpy&quot;</span><span class="p">,</span> <span class="n">mod</span><span class="p">);</span>
+  <span class="n">Py_DECREF</span><span class="p">(</span><span class="n">mod</span><span class="p">);</span>
+
+  <span class="cm">/* needs to be first so bpy_types can run */</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;types&quot;</span><span class="p">,</span> <span class="n">BPY_rna_types</span><span class="p">());</span>
+
+  <span class="cm">/* needs to be first so bpy_types can run */</span>
+  <span class="n">BPY_library_load_type_ready</span><span class="p">();</span>
+
+  <span class="n">BPY_rna_data_context_type_ready</span><span class="p">();</span>
+
+  <span class="n">BPY_rna_gizmo_module</span><span class="p">(</span><span class="n">mod</span><span class="p">);</span>
+
+  <span class="n">bpy_import_test</span><span class="p">(</span><span class="s">&quot;bpy_types&quot;</span><span class="p">);</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;data&quot;</span><span class="p">,</span> <span class="n">BPY_rna_module</span><span class="p">());</span> <span class="cm">/* imports bpy_types by running this */</span>
+  <span class="n">bpy_import_test</span><span class="p">(</span><span class="s">&quot;bpy_types&quot;</span><span class="p">);</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;props&quot;</span><span class="p">,</span> <span class="n">BPY_rna_props</span><span class="p">());</span>
+  <span class="cm">/* ops is now a python module that does the conversion from SOME_OT_foo -&gt; some.foo */</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;ops&quot;</span><span class="p">,</span> <span class="n">BPY_operator_module</span><span class="p">());</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;app&quot;</span><span class="p">,</span> <span class="n">BPY_app_struct</span><span class="p">());</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;_utils_units&quot;</span><span class="p">,</span> <span class="n">BPY_utils_units</span><span class="p">());</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;_utils_previews&quot;</span><span class="p">,</span> <span class="n">BPY_utils_previews_module</span><span class="p">());</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;msgbus&quot;</span><span class="p">,</span> <span class="n">BPY_msgbus_module</span><span class="p">());</span>
+
+  <span class="n">RNA_pointer_create</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">RNA_Context</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">ctx_ptr</span><span class="p">);</span>
+  <span class="n">bpy_context_module</span> <span class="o">=</span> <span class="p">(</span><span class="n">BPy_StructRNA</span> <span class="o">*</span><span class="p">)</span><span class="n">pyrna_struct_CreatePyObject</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ctx_ptr</span><span class="p">);</span>
+  <span class="cm">/* odd that this is needed, 1 ref on creation and another for the module</span>
+<span class="cm">   * but without we get a crash on exit */</span>
+  <span class="n">Py_INCREF</span><span class="p">(</span><span class="n">bpy_context_module</span><span class="p">);</span>
+
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="s">&quot;context&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">bpy_context_module</span><span class="p">);</span>
+
+  <span class="cm">/* Register methods and property get/set for RNA types. */</span>
+  <span class="n">BPY_rna_types_extend_capi</span><span class="p">();</span>
+
+  <span class="cm">/* utility func&#39;s that have nowhere else to go */</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_script_paths</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_script_paths</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span>
+      <span class="n">mod</span><span class="p">,</span> <span class="n">meth_bpy_blend_paths</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span> <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_blend_paths</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_user_resource</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_user_resource</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_system_resource</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_system_resource</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_resource_path</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_resource_path</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_escape_identifier</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_escape_identifier</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_unescape_identifier</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_unescape_identifier</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+
+  <span class="cm">/* register funcs (bpy_rna.c) */</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_register_class</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_register_class</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_unregister_class</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_unregister_class</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_owner_id_get</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_owner_id_get</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+  <span class="n">PyModule_AddObject</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span>
+                     <span class="n">meth_bpy_owner_id_set</span><span class="p">.</span><span class="n">ml_name</span><span class="p">,</span>
+                     <span class="p">(</span><span class="n">PyObject</span> <span class="o">*</span><span class="p">)</span><span class="n">PyCFunction_New</span><span class="p">(</span><span class="o">&amp;</span><span class="n">meth_bpy_owner_id_set</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+
+
+  <span class="cm">/* add our own modules dir, this is a python package */</span>
+  <span class="n">bpy_package_py</span> <span class="o">=</span> <span class="n">bpy_import_test</span><span class="p">(</span><span class="s">&quot;bpy&quot;</span><span class="p">);</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -76,37 +284,37 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
-          
         </div>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-<h1 class="logo"><a href="../index.html">bpy_module</a></h1>
-
-
-
-
-
-
-
-
-<h3>ナビゲーション</h3>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">source</a></li>
-<li class="toctree-l1"><a class="reference internal" href="build.html">build</a></li>
-<li class="toctree-l1"><a class="reference internal" href="stub.html">stub</a></li>
+  <h3><a href="../index.html">目次</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">source</a><ul>
+<li><a class="reference internal" href="#entrypoint-pyinit-bpy">entrypoint: PyInit_bpy</a></li>
+<li><a class="reference internal" href="#main">main</a></li>
+<li><a class="reference internal" href="#wm-init">WM_init</a></li>
+<li><a class="reference internal" href="#bpy-python-start">BPY_python_start</a></li>
+<li><a class="reference internal" href="#bpy-init-modules">BPy_init_modules</a></li>
+</ul>
+</li>
 </ul>
 
-<div class="relations">
-<h3>Related Topics</h3>
-<ul>
-  <li><a href="../index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="../index.html" title="前の章へ">bpy_module</a></li>
-      <li>Next: <a href="build.html" title="次の章へ">build</a></li>
-  </ul></li>
-</ul>
-</div>
+  <h4>前のトピックへ</h4>
+  <p class="topless"><a href="../index.html"
+                        title="前の章へ">bpy_module</a></p>
+  <h4>次のトピックへ</h4>
+  <p class="topless"><a href="build.html"
+                        title="次の章へ">build</a></p>
+  <div role="note" aria-label="source link">
+    <h3>このページ</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/bpy/source.md.txt"
+            rel="nofollow">ソースコードを表示</a></li>
+    </ul>
+   </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">クイック検索</h3>
     <div class="searchformwrapper">
@@ -117,32 +325,29 @@
     </div>
 </div>
 <script>$('#searchbox').show(0);</script>
-
-
-
-
-
-
-
-
         </div>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="footer">
-      &copy;2021, ousttrue.
-      
-      |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.2.0</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
-      
-      |
-      <a href="../_sources/bpy/source.md.txt"
-          rel="nofollow">Page source</a>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="build.html" title="build"
+             >次へ</a> |</li>
+        <li class="right" >
+          <a href="../index.html" title="bpy_module"
+             >前へ</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">bpy_module  ドキュメント</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">source</a></li> 
+      </ul>
     </div>
-
-    
-
-    
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2021, ousttrue.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.2.0.
+    </div>
   </body>
 </html>
