@@ -1,4 +1,5 @@
 import pathlib
+import site
 
 HERE = pathlib.Path(__file__).absolute().parent
 CLONE_DIR = HERE / 'blender'
@@ -57,6 +58,9 @@ else:
             yield action
 
     def task_bpy_build():
+        user_site = pathlib.Path(site.getusersitepackages())
+        pth = user_site / 'blender.pth'
+        dst = user_site / 'bpy'
         for tag in REPO.tags:
             base_dir = HERE / f'tags/{tag.name}'
             install = base_dir / 'bpy_install'
@@ -73,11 +77,12 @@ else:
                     CmdAction(f'cmake --build bpy', cwd=base_dir),
                     CmdAction(
                         f'cmake --install bpy --config Release --prefix {install}',
-                        cwd=base_dir)
+                        cwd=base_dir),
+                    f'echo bpy > {pth}',
+                    f'ln -s {install} {dst}',
                 ],
             }
 
     DOIT_CONFIG = {
         'default_tasks': [],
     }
-
