@@ -12,7 +12,9 @@
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
     <script src="../_static/jquery.js"></script>
     <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="../_static/doctools.js"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
     <script src="../_static/translations.js"></script>
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="検索" href="../search.html" />
@@ -48,20 +50,20 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="build">
-<h1>build<a class="headerlink" href="#build" title="このヘッドラインへのパーマリンク">¶</a></h1>
+  <section id="build">
+<h1>build<a class="headerlink" href="#build" title="この見出しへのパーマリンク">¶</a></h1>
 <p><a class="reference external" href="https://wiki.blender.org/wiki/Building_Blender/Other/BlenderAsPyModule">https://wiki.blender.org/wiki/Building_Blender/Other/BlenderAsPyModule</a></p>
 <section id="third-party-library">
-<h2>third-party library<a class="headerlink" href="#third-party-library" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<h2>third-party library<a class="headerlink" href="#third-party-library" title="この見出しへのパーマリンク">¶</a></h2>
 <section id="linux">
-<h3>Linux<a class="headerlink" href="#linux" title="このヘッドラインへのパーマリンク">¶</a></h3>
+<h3>Linux<a class="headerlink" href="#linux" title="この見出しへのパーマリンク">¶</a></h3>
 </section>
 <section id="windows">
-<h3>Windows<a class="headerlink" href="#windows" title="このヘッドラインへのパーマリンク">¶</a></h3>
+<h3>Windows<a class="headerlink" href="#windows" title="この見出しへのパーマリンク">¶</a></h3>
 </section>
 </section>
 <section id="module-build">
-<h2>module build<a class="headerlink" href="#module-build" title="このヘッドラインへのパーマリンク">¶</a></h2>
+<h2>module build<a class="headerlink" href="#module-build" title="この見出しへのパーマリンク">¶</a></h2>
 <p>cmake に <code class="docutils literal notranslate"><span class="pre">-DWITH_PYTHON_MODULE=ON</span></code> を与えることで python module としてビルドできる。</p>
 </section>
 </section>
@@ -73,8 +75,9 @@
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="../index.html">目次</a></h3>
-  <ul>
+  <div>
+    <h3><a href="../index.html">目次</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">build</a><ul>
 <li><a class="reference internal" href="#third-party-library">third-party library</a><ul>
 <li><a class="reference internal" href="#linux">Linux</a></li>
@@ -86,12 +89,17 @@
 </li>
 </ul>
 
-  <h4>前のトピックへ</h4>
-  <p class="topless"><a href="source.html"
-                        title="前の章へ">source</a></p>
-  <h4>次のトピックへ</h4>
-  <p class="topless"><a href="stub.html"
-                        title="次の章へ">stub</a></p>
+  </div>
+  <div>
+    <h4>前のトピックへ</h4>
+    <p class="topless"><a href="source.html"
+                          title="前の章へ">source</a></p>
+  </div>
+  <div>
+    <h4>次のトピックへ</h4>
+    <p class="topless"><a href="stub.html"
+                          title="次の章へ">stub</a></p>
+  </div>
   <div role="note" aria-label="source link">
     <h3>このページ</h3>
     <ul class="this-page-menu">
@@ -108,7 +116,7 @@
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -131,7 +139,7 @@
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2021, ousttrue.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.2.0.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.3.0.
     </div>
   </body>
 </html>
