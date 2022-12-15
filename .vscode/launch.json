@@ -39,7 +39,9 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/stub_generator.py",
-            "args": [],
+            "args": [
+                "D:/ghq/github.com/ousttrue/bpy_pose/typings",
+            ],
             "console": "integratedTerminal"
         },
         {

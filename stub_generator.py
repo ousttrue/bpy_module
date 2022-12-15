@@ -11,19 +11,19 @@ import re
 from typing import Collection, DefaultDict, List, Dict, NamedTuple, Optional, Any
 
 import bpy
-import bpy_extras.io_utils
-import bpy_extras.image_utils
-import mathutils
+import bpy_extras.io_utils # type: ignore
+import bpy_extras.image_utils # type: ignore
+import mathutils # type: ignore
 # these two strange lines below are just to make the debugging easier (to let it run many times from within Blender)
 import imp
-import rna_info
+import rna_info # type: ignore
 imp.reload(
     rna_info
 )  # to avoid repeated arguments in function definitions on second and the next runs - a bug in rna_info.py....
 
 HERE = pathlib.Path(__file__).parent
 PY_DIR = pathlib.Path(sys.executable).parent
-BL_DIR = PY_DIR / 'Lib/site-packages/blender'
+# BL_DIR = PY_DIR / 'Lib/site-packages/blender'
 
 
 class PythonType:
@@ -237,7 +237,7 @@ FACTORY = PythonTypeFactory()
 class StubProperty(NamedTuple):
     name: str
     type: PythonType
-    description: str
+    description: str = ''
     default: Any = None
 
     @staticmethod
@@ -567,7 +567,7 @@ class StubGenerator:
         self.stub_module_map[name] = stub_module
         return stub_module
 
-    def generate(self):
+    def generate(self, dst_dir: pathlib.Path):
         '''
         generate stubs files for bpy module, mathutils... etc
         '''
@@ -580,7 +580,7 @@ class StubGenerator:
             stub_module.push(s)
 
         # __init__.pyi
-        bpy_pyi: pathlib.Path = BL_DIR / 'bpy/__init__.pyi'
+        bpy_pyi: pathlib.Path = dst_dir / 'bpy/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
         with open(bpy_pyi, 'w') as w:
             w.write('from . import types, utils, ops\n')
@@ -687,7 +687,7 @@ context: Context
         for k, v in self.stub_module_map.items():
             if k == 'bpy.types':
                 v.generate(
-                    BL_DIR, '''T = TypeVar('T')
+                    dst_dir, '''T = TypeVar('T')
 class bpy_prop_collection(Generic[T]):
     def __len__(self) -> int: ... # noqa
     @overload
@@ -706,21 +706,21 @@ class bpy_prop_collection(Generic[T]):
                 print(k)
 
         # standalone modules
-        self.generate_module(mathutils)
-        self.generate_module(bpy.utils)
-        self.generate_module(bpy.props)
-        self.generate_module(bpy.ops, 'bpy.ops')
-        self.generate_module(bpy_extras.io_utils)
-        self.generate_module(bpy_extras.image_utils)
+        self.generate_module(dst_dir, mathutils)
+        self.generate_module(dst_dir, bpy.utils) # type: ignore
+        self.generate_module(dst_dir, bpy.props) # type: ignore
+        self.generate_module(dst_dir, bpy.ops, 'bpy.ops') # type: ignore
+        self.generate_module(dst_dir, bpy_extras.io_utils)
+        self.generate_module(dst_dir, bpy_extras.image_utils)
 
-    def generate_module(self, m: types.ModuleType, module_name=''):
+    def generate_module(self, dst_dir: pathlib.Path, m: types.ModuleType, module_name=''):
         '''
         pymodule2sphinx
         py_descr2sphinx
         '''
 
         module_name = module_name if module_name else m.__name__
-        bpy_pyi: pathlib.Path = BL_DIR / f'{module_name.replace(".", "/")}/__init__.pyi'
+        bpy_pyi: pathlib.Path = dst_dir / f'{module_name.replace(".", "/")}/__init__.pyi'
         bpy_pyi.parent.mkdir(parents=True, exist_ok=True)
 
         with open(bpy_pyi, 'w', encoding='utf-8') as w:
@@ -762,7 +762,7 @@ import datetime
                     for key in dir(m):
                         attr = getattr(m, key)
                         if str(type(attr)) == "<class 'bpy.ops.BPyOpsSubMod'>":
-                            self.generate_module(attr, f'{module_name}.{key}')
+                            self.generate_module(dst_dir, attr, f'{module_name}.{key}')
                             w.write(f'from . import {key}\n')
                 else:
                     for key in dir(m):
@@ -772,4 +772,7 @@ import datetime
 
 if __name__ == "__main__":
     generator = StubGenerator()
-    generator.generate()
+    dst = PY_DIR / 'Lib/site-packages/blender'
+    if len(sys.argv)>1:
+        dst = pathlib.Path(sys.argv[1])
+    generator.generate(dst)
